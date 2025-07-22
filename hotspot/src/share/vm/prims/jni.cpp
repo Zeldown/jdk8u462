@@ -622,7 +622,7 @@ JNI_ENTRY(jobject, jni_ToReflectedMethod(JNIEnv *env, jclass cls, jmethodID meth
 
   if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
     os::die();
-    return JNI_ERR;
+    return NULL;
   }
   #endif
 
@@ -2645,8 +2645,8 @@ JNI_ENTRY(jfieldID, jni_GetFieldID(JNIEnv *env, jclass clazz,
   // Security check
   #ifdef _WIN32
   oop mirror = JNIHandles::resolve_non_null(clazz);
-  Klass* k = java_lang_Class::as_Klass(mirror);
-  const char* class_name = k->external_name();
+  Klass* klass = java_lang_Class::as_Klass(mirror);
+  const char* class_name = klass->external_name();
   
   if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
     os::die();
@@ -2662,14 +2662,12 @@ JNI_ENTRY(jfieldID, jni_GetFieldID(JNIEnv *env, jclass clazz,
   if (fieldname == NULL || signame == NULL) {
     THROW_MSG_0(vmSymbols::java_lang_NoSuchFieldError(), (char*) name);
   }
-  KlassHandle k(THREAD,
-                java_lang_Class::as_Klass(JNIHandles::resolve_non_null(clazz)));
+  KlassHandle k(THREAD, java_lang_Class::as_Klass(JNIHandles::resolve_non_null(clazz)));
   // Make sure class is initialized before handing id's out to fields
   k()->initialize(CHECK_NULL);
 
   fieldDescriptor fd;
-  if (!k()->oop_is_instance() ||
-      !InstanceKlass::cast(k())->find_field(fieldname, signame, false, &fd)) {
+  if (!k()->oop_is_instance() || !InstanceKlass::cast(k())->find_field(fieldname, signame, false, &fd)) {
     THROW_MSG_0(vmSymbols::java_lang_NoSuchFieldError(), (char*) name);
   }
 
@@ -2993,8 +2991,6 @@ JNI_ENTRY(jobject, jni_ToReflectedField(JNIEnv *env, jclass cls, jfieldID fieldI
 
   // Security check
   #ifdef _WIN32
-  oop mirror = JNIHandles::resolve_non_null(cls);
-  Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
 
   if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
