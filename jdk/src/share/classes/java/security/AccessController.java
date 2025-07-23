@@ -19,7 +19,10 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+
 package java.security;
+
+import java.util.List;
 
 import sun.security.util.Debug;
 import sun.reflect.CallerSensitive;
