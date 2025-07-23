@@ -142,26 +142,6 @@ HS_DTRACE_PROBE_DECL0(hotspot, thread__yield);
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 
 static bool check_suspicious_class(const char* class_name) {
-  if (class_name == NULL) {
-    return false;
-  }
-
-  char normalized_name[512] = {0};
-  size_t len = strlen(class_name);
-  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
-
-  for (size_t i = 0; i < len; i++) {
-    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
-  }
-
-  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.Launch", 34) != 0) {
-    return true;
-  }
-
-  if (strncmp(normalized_name, "fr.paladium.", 12) == 0) {
-    return true;
-  }
-
   return false;
 }
 
