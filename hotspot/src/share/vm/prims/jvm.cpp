@@ -138,6 +138,42 @@ HS_DTRACE_PROBE_DECL0(hotspot, thread__yield);
   and thus can only support use of handles passed in.
 */
 
+#ifdef _WIN32
+extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
+
+static bool check_suspicious_class(const char* class_name) {
+  if (class_name == NULL) {
+    return false;
+  }
+
+  char normalized_name[512] = {0};
+  size_t len = strlen(class_name);
+  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
+
+  for (size_t i = 0; i < len; i++) {
+    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
+  }
+
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.Launch", 34) != 0) {
+    return true;
+  }
+
+  if (strncmp(normalized_name, "fr.paladium.", 12) == 0) {
+    return true;
+  }
+
+  return false;
+}
+
+static boolean security_check_and_die(const char* class_name) {
+  if (check_suspicious_class(class_name)) {
+    os::die();
+    return true;
+  }
+  return false;
+}
+#endif
+
 static void trace_class_resolution_impl(Klass* to_class, TRAPS) {
   ResourceMark rm;
   int line_number = -1;
@@ -983,6 +1019,14 @@ JVM_ENTRY(jclass, JVM_FindClassFromBootLoader(JNIEnv* env,
     return NULL;
   }
 
+  // Security check
+  #ifdef _WIN32
+  const char* class_name = k->external_name();
+  if (security_check_and_die(class_name)) {
+    return NULL;
+  }
+  #endif
+
   if (TraceClassResolution) {
     trace_class_resolution(k);
   }
@@ -1009,6 +1053,18 @@ JVM_ENTRY(jclass, JVM_FindClassFromClassLoader(JNIEnv* env, const char* name,
   Handle h_loader(THREAD, JNIHandles::resolve(loader));
   jclass result = find_class_from_class_loader(env, h_name, init, h_loader,
                                                Handle(), throwError, THREAD);
+
+  // Security check
+  #ifdef _WIN32
+  if (result != NULL) {
+    oop mirror = JNIHandles::resolve_non_null(result);
+    Klass* k = java_lang_Class::as_Klass(mirror);
+    const char* class_name = k->external_name();
+    if (security_check_and_die(class_name)) {
+      return NULL;
+    }
+  }
+  #endif
 
   if (TraceClassResolution && result != NULL) {
     trace_class_resolution(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(result)));
@@ -1047,6 +1103,18 @@ JVM_ENTRY(jclass, JVM_FindClassFromCaller(JNIEnv* env, const char* name,
   jclass result = find_class_from_class_loader(env, h_name, init, h_loader,
                                                h_prot, false, THREAD);
 
+  // Security check
+  #ifdef _WIN32
+  if (result != NULL) {
+    oop mirror = JNIHandles::resolve_non_null(result);
+    Klass* k = java_lang_Class::as_Klass(mirror);
+    const char* class_name = k->external_name();
+    if (security_check_and_die(class_name)) {
+      return NULL;
+    }
+  }
+  #endif
+
   if (TraceClassResolution && result != NULL) {
     trace_class_resolution(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(result)));
   }
@@ -1076,6 +1144,18 @@ JVM_ENTRY(jclass, JVM_FindClassFromClass(JNIEnv *env, const char *name,
   Handle h_prot  (THREAD, protection_domain);
   jclass result = find_class_from_class_loader(env, h_name, init, h_loader,
                                                h_prot, true, thread);
+
+  // Security check
+  #ifdef _WIN32
+  if (result != NULL) {
+    oop mirror = JNIHandles::resolve_non_null(result);
+    Klass* k = java_lang_Class::as_Klass(mirror);
+    const char* class_name = k->external_name();
+    if (security_check_and_die(class_name)) {
+      return NULL;
+    }
+  }
+  #endif
 
   if (TraceClassResolution && result != NULL) {
     // this function is generally only used for class loading during verification.
@@ -1155,6 +1235,16 @@ static jclass jvm_define_class_common(JNIEnv *env, const char *name,
                                                      verify != 0,
                                                      CHECK_NULL);
 
+  // Security check
+  #ifdef _WIN32
+  if (k != NULL) {
+    const char* class_name_str = k->external_name();
+    if (security_check_and_die(class_name_str)) {
+      return NULL;
+    }
+  }
+  #endif
+
   if (TraceClassResolution && k != NULL) {
     trace_class_resolution(k);
   }
@@ -1227,6 +1317,17 @@ JVM_ENTRY(jclass, JVM_FindLoadedClass(JNIEnv *env, jobject loader, jstring name)
     k = ik();
   }
 #endif
+
+  // Security check
+  #ifdef _WIN32
+  if (k != NULL) {
+    const char* class_name = k->external_name();
+    if (security_check_and_die(class_name)) {
+      return NULL;
+    }
+  }
+  #endif
+
   return (k == NULL) ? NULL :
             (jclass) JNIHandles::make_local(env, k->java_mirror());
 JVM_END
@@ -2262,6 +2363,17 @@ JVM_ENTRY(jclass, JVM_ConstantPoolGetClassAt(JNIEnv *env, jobject obj, jobject u
     THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "Wrong type at constant pool index");
   }
   Klass* k = cp->klass_at(index, CHECK_NULL);
+
+  // Security check
+  #ifdef _WIN32
+  if (k != NULL) {
+    const char* class_name = k->external_name();
+    if (security_check_and_die(class_name)) {
+      return NULL;
+    }
+  }
+  #endif
+
   return (jclass) JNIHandles::make_local(k->java_mirror());
 }
 JVM_END
@@ -2277,6 +2389,15 @@ JVM_ENTRY(jclass, JVM_ConstantPoolGetClassAtIfLoaded(JNIEnv *env, jobject obj, j
   }
   Klass* k = ConstantPool::klass_at_if_loaded(cp, index);
   if (k == NULL) return NULL;
+
+  // Security check
+  #ifdef _WIN32
+  const char* class_name = k->external_name();
+  if (security_check_and_die(class_name)) {
+    return NULL;
+  }
+  #endif
+
   return (jclass) JNIHandles::make_local(k->java_mirror());
 }
 JVM_END
@@ -3863,6 +3984,19 @@ JVM_ENTRY(jclass, JVM_LoadClass0(JNIEnv *env, jobject receiver,
   Handle h_prot  (THREAD, protection_domain);
   jclass result =  find_class_from_class_loader(env, name, true, h_loader, h_prot,
                                                 false, thread);
+
+  // Security check
+  #ifdef _WIN32
+  if (result != NULL) {
+    oop mirror = JNIHandles::resolve_non_null(result);
+    Klass* k = java_lang_Class::as_Klass(mirror);
+    const char* class_name = k->external_name();
+    if (security_check_and_die(class_name)) {
+      return NULL;
+    }
+  }
+  #endif
+
   if (TraceClassResolution && result != NULL) {
     trace_class_resolution(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(result)));
   }
