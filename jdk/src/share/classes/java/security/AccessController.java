@@ -1,6 +1,4 @@
-    /**
-     * Represents a loaded DLL with its metadata.
-     */
+/*
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
  * published by the Free Software Foundation.  Oracle designates this
@@ -21,7 +19,6 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
 package java.security;
 
 import sun.security.util.Debug;
