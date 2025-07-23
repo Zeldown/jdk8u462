@@ -13,7 +13,6 @@
 
 #include "jni.h"
 #include "jvm.h"
-#include "java_security_AccessController.h"
 
 #include <jni.h>
 #include <jvmti.h>
@@ -42,20 +41,6 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
-static JNINativeMethod methods[] = {
-    {"getLoadedDlls", "()Ljava/util/List;", (void*)Java_java_security_AccessController_getLoadedDlls},
-    {"getLoadedClassesNative", "()Ljava/util/List;", (void*)Java_java_security_AccessController_getLoadedClassesNative},
-};
-
-JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
-    JNIEnv* env;
-    if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
-    jclass cls = (*env)->FindClass(env, "java/security/AccessController");
-    if (cls == NULL) return JNI_ERR;
-    if ((*env)->RegisterNatives(env, cls, methods, sizeof(methods)/sizeof(methods[0])) != 0) return JNI_ERR;
-    return JNI_VERSION_1_6;
-}
 
 static jvmtiEnv* get_jvmti_env(JavaVM* jvm) {
     jvmtiEnv* jvmti = NULL;
