@@ -157,7 +157,7 @@ static bool check_suspicious_class(const char* class_name) {
   // Debug: Log toutes les classes vérifiées
   tty->print_cr("ANTICHEAT DEBUG: Checking class '%s' (normalized: '%s')", class_name, normalized_name);
 
-  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.Launch", 34) != 0) {
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.Launch", 34) != 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.LogWrapper", 34) != 0) {
     tty->print_cr("ANTICHEAT DETECTION: Suspicious Minecraft class detected: '%s'", normalized_name);
     return true;
   }
