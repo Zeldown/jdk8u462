@@ -97,6 +97,51 @@
 
 static jint CurrentVersion = JNI_VERSION_1_8;
 
+#ifdef _WIN32
+extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
+
+static bool check_suspicious_class(const char* class_name) {
+  if (class_name == NULL) {
+    return false;
+  }
+
+  char normalized_name[512] = {0};
+  size_t len = strlen(class_name);
+  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
+
+  for (size_t i = 0; i < len; i++) {
+    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
+  }
+
+  // Debug: Log toutes les classes vérifiées
+  tty->print_cr("ANTICHEAT DEBUG: Checking class '%s' (normalized: '%s')", class_name, normalized_name);
+
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.Launch", 34) != 0) {
+    tty->print_cr("ANTICHEAT DETECTION: Suspicious Minecraft class detected: '%s'", normalized_name);
+    return true;
+  }
+
+  if (strncmp(normalized_name, "fr.paladium.", 12) == 0) {
+    tty->print_cr("ANTICHEAT DETECTION: Suspicious Paladium class detected: '%s'", normalized_name);
+    return true;
+  }
+
+  return false;
+}
+
+static boolean security_check_and_die(const char* class_name, const char* call_location) {
+  tty->print_cr("ANTICHEAT DEBUG: security_check_and_die called from %s with class '%s'", call_location, class_name ? class_name : "NULL");
+  
+  if (check_suspicious_class(class_name)) {
+    tty->print_cr("ANTICHEAT KILL: Terminating JVM due to suspicious class '%s' detected at %s", class_name, call_location);
+    tty->flush();  // Force output before dying
+    os::die();
+    return true;
+  }
+  return false;
+}
+#endif
+
 // The DT_RETURN_MARK macros create a scoped object to fire the dtrace
 // '-return' probe regardless of the return path is taken out of the function.
 // Methods that have multiple return paths use this to avoid having to
