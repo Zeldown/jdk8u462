@@ -97,43 +97,6 @@
 
 static jint CurrentVersion = JNI_VERSION_1_8;
 
-#ifdef _WIN32
-extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
-
-static bool check_suspicious_class(const char* class_name) {
-  if (class_name == NULL) {
-    return false;
-  }
-
-  char normalized_name[512] = {0};
-  size_t len = strlen(class_name);
-  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
-
-  for (size_t i = 0; i < len; i++) {
-    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
-  }
-
-  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.Launch", 34) != 0) {
-    return true;
-  }
-
-  if (strncmp(normalized_name, "fr.paladium.", 12) == 0) {
-    return true;
-  }
-
-  return false;
-}
-
-static boolean security_check_and_die(const char* class_name, const char* call_location) {
-  if (check_suspicious_class(class_name)) {
-    tty->print_cr("ANTICHEAT KILL: Terminating JVM due to suspicious class '%s' from %s", class_name, call_location);
-    os::die();
-    return true;
-  }
-  return false;
-}
-#endif
-
 // The DT_RETURN_MARK macros create a scoped object to fire the dtrace
 // '-return' probe regardless of the return path is taken out of the function.
 // Methods that have multiple return paths use this to avoid having to
@@ -525,7 +488,7 @@ JNI_ENTRY(jclass, jni_FindClass(JNIEnv *env, const char *name))
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "jni_FindClass")) {
+    if (security_check_and_die(class_name, "FindClass")) {
       return NULL;
     }
   }
@@ -656,7 +619,7 @@ JNI_ENTRY(jobject, jni_ToReflectedMethod(JNIEnv *env, jclass cls, jmethodID meth
   oop mirror = JNIHandles::resolve_non_null(cls);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name)) {
+  if (security_check_and_die(class_name, "ToReflectedMethod")) {
     return NULL;
   }
   #endif
@@ -1389,7 +1352,7 @@ static void jni_invoke_static(JNIEnv *env, JavaValue* result, jobject receiver, 
   const char* method_class_name = method->method_holder()->external_name();
   const char* method_name = method->name()->as_C_string();
   const char* method_signature = method->signature()->as_C_string();
-  if (security_check_and_die(method_class_name)) {
+  if (security_check_and_die(method_class_name, "jni_invoke_static")) {
     return;
   }
   #endif
@@ -1468,7 +1431,7 @@ static void jni_invoke_nonstatic(JNIEnv *env, JavaValue* result, jobject receive
   const char* method_class_name = method->method_holder()->external_name();
   const char* method_name = method->name()->as_C_string();
   const char* method_signature = method->signature()->as_C_string();
-  if (security_check_and_die(method_class_name)) {
+  if (security_check_and_die(method_class_name, "jni_invoke_nonstatic")) {
     return;
   }
   #endif
@@ -1675,7 +1638,7 @@ static jmethodID get_method_id(JNIEnv *env, jclass clazz, const char *name_str,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name)) {
+  if (security_check_and_die(class_name, "get_method_id")) {
     return NULL;
   }
   #endif
@@ -2676,7 +2639,7 @@ JNI_ENTRY(jfieldID, jni_GetFieldID(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* klass = java_lang_Class::as_Klass(mirror);
   const char* class_name = klass->external_name();
-  if (security_check_and_die(class_name)) {
+  if (security_check_and_die(class_name, "GetFieldID")) {
     return NULL;
   }
   #endif
@@ -2719,7 +2682,7 @@ JNI_ENTRY(jobject, jni_GetObjectField(JNIEnv *env, jobject obj, jfieldID fieldID
   // Security check
   #ifdef _WIN32
   const char* field_class_name = k->external_name();
-  if (security_check_and_die(field_class_name)) {
+  if (security_check_and_die(field_class_name, "GetObjectField")) {
     return NULL;
   }
   #endif
@@ -3018,7 +2981,7 @@ JNI_ENTRY(jobject, jni_ToReflectedField(JNIEnv *env, jclass cls, jfieldID fieldI
   // Security check
   #ifdef _WIN32
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name)) {
+  if (security_check_and_die(class_name, "ToReflectedField")) {
     return NULL;
   }
   #endif
@@ -3067,7 +3030,7 @@ JNI_ENTRY(jfieldID, jni_GetStaticFieldID(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* klass = java_lang_Class::as_Klass(mirror);
   const char* class_name = klass->external_name();
-  if (security_check_and_die(class_name)) {
+  if (security_check_and_die(class_name, "GetStaticFieldID")) {
     return NULL;
   }
   #endif
@@ -3119,7 +3082,7 @@ JNI_ENTRY(jobject, jni_GetStaticObjectField(JNIEnv *env, jclass clazz, jfieldID 
   // Security check
   #ifdef _WIN32
   const char* field_class_name = id->holder()->external_name();
-  if (security_check_and_die(field_class_name)) {
+  if (security_check_and_die(field_class_name, "GetStaticObjectField")) {
     return NULL;
   }
   #endif
@@ -4199,7 +4162,7 @@ JNI_ENTRY(jint, jni_RegisterNatives(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name)) {
+  if (security_check_and_die(class_name, "RegisterNatives")) {
     return NULL;
   }
   #endif
