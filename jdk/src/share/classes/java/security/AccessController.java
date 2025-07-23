@@ -1,7 +1,6 @@
-/*
- * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
+    /**
+     * Represents a loaded DLL with its metadata.
+     */
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
  * published by the Free Software Foundation.  Oracle designates this
@@ -262,6 +261,41 @@ import sun.reflect.Reflection;
  */
 
 public final class AccessController {
+    
+    public static class LoadedDllInfo {
+        public final String name;
+        public final String path;
+        public final long size;
+        public final long loadTime;
+        public final String hash;
+
+        public LoadedDllInfo(String name, String path, long size, long loadTime, String hash) {
+            this.name = name;
+            this.path = path;
+            this.size = size;
+            this.loadTime = loadTime;
+            this.hash = hash;
+        }
+    }
+
+    public static native List<LoadedDllInfo> getLoadedDlls();
+
+    public static class LoadedClassInfo {
+        public final String name;
+        public final byte[] bytecode;
+        public final long size;
+        public final long loadTime;
+
+        public LoadedClassInfo(String name, byte[] bytecode, long size, long loadTime) {
+            this.name = name;
+            this.bytecode = bytecode;
+            this.size = size;
+            this.loadTime = loadTime;
+        }
+    }
+
+    public static native List<LoadedClassInfo> getLoadedClassesNative();
+
 
     /**
      * Don't allow anyone to instantiate an AccessController

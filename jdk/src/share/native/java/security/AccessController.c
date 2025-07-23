@@ -1,3 +1,23 @@
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#include <wincrypt.h>
+#pragma comment(lib, "psapi.lib")
+#pragma comment(lib, "advapi32.lib")
+#endif
+
+#include <stdio.h>
+#include <stdint.h>
+
+#include <string.h>
+
+#include "jni.h"
+#include "jvm.h"
+#include "java_security_AccessController.h"
+
+#include <jni.h>
+#include <jvmti.h>
+
 /*
  * Copyright (c) 1997, 1998, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -23,16 +43,185 @@
  * questions.
  */
 
-/*-
- *      Implementation of class java.security.AccessController
- *
+static JNINativeMethod methods[] = {
+    {"getLoadedDlls", "()Ljava/util/List;", (void*)Java_java_security_AccessController_getLoadedDlls},
+    {"getLoadedClassesNative", "()Ljava/util/List;", (void*)Java_java_security_AccessController_getLoadedClassesNative},
+};
+
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    JNIEnv* env;
+    if ((*vm)->GetEnv(vm, (void**)&env, JNI_VERSION_1_6) != JNI_OK) return JNI_ERR;
+    jclass cls = (*env)->FindClass(env, "java/security/AccessController");
+    if (cls == NULL) return JNI_ERR;
+    if ((*env)->RegisterNatives(env, cls, methods, sizeof(methods)/sizeof(methods[0])) != 0) return JNI_ERR;
+    return JNI_VERSION_1_6;
+}
+
+static jvmtiEnv* get_jvmti_env(JavaVM* jvm) {
+    jvmtiEnv* jvmti = NULL;
+    jint res = (*jvm)->GetEnv(jvm, (void**)&jvmti, JVMTI_VERSION_1_2);
+    if (res != JNI_OK || jvmti == NULL) return NULL;
+    return jvmti;
+}
+
+/*
+ * Class:     java_security_AccessController
+ * Method:    getLoadedClassesNative
+ * Signature: ()Ljava/util/List;
  */
+JNIEXPORT jobject JNICALL Java_java_security_AccessController_getLoadedClassesNative(JNIEnv *env, jclass cls) {
+    JavaVM* jvm;
+    (*env)->GetJavaVM(env, &jvm);
+    jvmtiEnv* jvmti = get_jvmti_env(jvm);
+    if (jvmti == NULL) return NULL;
 
-#include <string.h>
+    jint class_count = 0;
+    jclass* classes = NULL;
+    if ((*jvmti)->GetLoadedClasses(jvmti, &class_count, &classes) != JVMTI_ERROR_NONE) return NULL;
 
-#include "jni.h"
-#include "jvm.h"
-#include "java_security_AccessController.h"
+    jclass arrayListClass = (*env)->FindClass(env, "java/util/ArrayList");
+    jmethodID arrayListInit = (*env)->GetMethodID(env, arrayListClass, "<init>", "()V");
+    jmethodID arrayListAdd = (*env)->GetMethodID(env, arrayListClass, "add", "(Ljava/lang/Object;)Z");
+    jobject arrayList = (*env)->NewObject(env, arrayListClass, arrayListInit);
+
+    jclass loadedClassInfoClass = (*env)->FindClass(env, "java/security/AccessController$LoadedClassInfo");
+    jmethodID loadedClassInfoCtor = (*env)->GetMethodID(env, loadedClassInfoClass, "<init>", "(Ljava/lang/String;[BJJ)V");
+
+    for (int i = 0; i < class_count; i++) {
+        char* signature = NULL;
+        if ((*jvmti)->GetClassSignature(jvmti, classes[i], &signature, NULL) != JVMTI_ERROR_NONE) continue;
+        char className[512];
+        if (signature[0] == 'L') {
+            strncpy(className, signature + 1, sizeof(className));
+            char* semi = strchr(className, ';');
+            if (semi) *semi = '\0';
+            for (char* p = className; *p; ++p) if (*p == '/') *p = '.';
+        } else {
+            strncpy(className, signature, sizeof(className));
+        }
+        jstring jName = (*env)->NewStringUTF(env, className);
+        (*jvmti)->Deallocate(jvmti, (unsigned char*)signature);
+
+        jint bytecodeLen = 0;
+        unsigned char* bytecodes = NULL;
+        if ((*jvmti)->GetClassBytes(jvmti, classes[i], &bytecodeLen, &bytecodes) != JVMTI_ERROR_NONE) {
+            bytecodes = NULL;
+            bytecodeLen = 0;
+        }
+        jbyteArray jBytecode = NULL;
+        if (bytecodes && bytecodeLen > 0) {
+            jByteArray arr = (*env)->NewByteArray(env, bytecodeLen);
+            (*env)->SetByteArrayRegion(env, arr, 0, bytecodeLen, (jbyte*)bytecodes);
+            jBytecode = arr;
+            (*jvmti)->Deallocate(jvmti, bytecodes);
+        }
+
+        jlong size = (jlong)bytecodeLen;
+
+        jlong loadTime = -1;
+
+        jobject classInfo = (*env)->NewObject(env, loadedClassInfoClass, loadedClassInfoCtor, jName, jBytecode, size, loadTime);
+        (*env)->CallBooleanMethod(env, arrayList, arrayListAdd, classInfo);
+    }
+    if (classes) (*jvmti)->Deallocate(jvmti, (unsigned char*)classes);
+    return arrayList;
+}
+
+/*
+ * Class:     java_security_AccessController
+ * Method:    getLoadedDlls
+ * Signature: ()Ljava/util/List;
+ */
+JNIEXPORT jobject JNICALL Java_java_security_AccessController_getLoadedDlls(JNIEnv *env, jclass cls) {
+#ifdef _WIN32
+    HMODULE hMods[1024];
+    HANDLE hProcess;
+    DWORD cbNeeded;
+    int i;
+    jobject arrayList = NULL;
+    jclass arrayListClass = NULL;
+    jmethodID arrayListInit = NULL;
+    jmethodID arrayListAdd = NULL;
+    jclass loadedDllInfoClass = NULL;
+    jmethodID loadedDllInfoCtor = NULL;
+
+    hProcess = GetCurrentProcess();
+    if (!EnumProcessModules(hProcess, hMods, sizeof(hMods), &cbNeeded)) {
+        return NULL;
+    }
+    int count = cbNeeded / sizeof(HMODULE);
+
+    arrayListClass = (*env)->FindClass(env, "java/util/ArrayList");
+    arrayListInit = (*env)->GetMethodID(env, arrayListClass, "<init>", "()V");
+    arrayListAdd = (*env)->GetMethodID(env, arrayListClass, "add", "(Ljava/lang/Object;)Z");
+    arrayList = (*env)->NewObject(env, arrayListClass, arrayListInit);
+
+    loadedDllInfoClass = (*env)->FindClass(env, "java/security/AccessController$LoadedDllInfo");
+    loadedDllInfoCtor = (*env)->GetMethodID(env, loadedDllInfoClass, "<init>", "(Ljava/lang/String;Ljava/lang/String;JJLjava/lang/String;)V");
+
+    for (i = 0; i < count; i++) {
+        TCHAR szModName[MAX_PATH];
+        if (GetModuleFileNameEx(hProcess, hMods[i], szModName, sizeof(szModName)/sizeof(TCHAR))) {
+            char *baseName = strrchr(szModName, '\\');
+            baseName = baseName ? baseName + 1 : szModName;
+            jstring jName = (*env)->NewStringUTF(env, baseName);
+            jstring jPath = (*env)->NewStringUTF(env, szModName);
+
+            HANDLE hFile = CreateFile(szModName, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+            long long size = 0;
+            if (hFile != INVALID_HANDLE_VALUE) {
+                LARGE_INTEGER li;
+                if (GetFileSizeEx(hFile, &li)) {
+                    size = li.QuadPart;
+                }
+            }
+
+            FILETIME ftCreate, ftAccess, ftWrite;
+            long long loadTime = 0;
+            if (hFile != INVALID_HANDLE_VALUE && GetFileTime(hFile, &ftCreate, &ftAccess, &ftWrite)) {
+                ULARGE_INTEGER ull;
+                ull.LowPart = ftWrite.dwLowDateTime;
+                ull.HighPart = ftWrite.dwHighDateTime;
+                loadTime = ull.QuadPart;
+            }
+
+            char hashStr[65] = {0};
+            if (hFile != INVALID_HANDLE_VALUE) {
+                BYTE buffer[4096];
+                DWORD bytesRead;
+                HCRYPTPROV hProv = 0;
+                HCRYPTHASH hHash = 0;
+                if (CryptAcquireContext(&hProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT)) {
+                    if (CryptCreateHash(hProv, CALG_SHA_256, 0, 0, &hHash)) {
+                        SetFilePointer(hFile, 0, NULL, FILE_BEGIN);
+                        while (ReadFile(hFile, buffer, sizeof(buffer), &bytesRead, NULL) && bytesRead > 0) {
+                            CryptHashData(hHash, buffer, bytesRead, 0);
+                        }
+                        BYTE hash[32];
+                        DWORD hashLen = 32;
+                        if (CryptGetHashParam(hHash, HP_HASHVAL, hash, &hashLen, 0)) {
+                            for (int k = 0; k < 32; k++) {
+                                sprintf(hashStr + k*2, "%02x", hash[k]);
+                            }
+                        }
+                        CryptDestroyHash(hHash);
+                    }
+                    CryptReleaseContext(hProv, 0);
+                }
+            }
+            if (hFile != INVALID_HANDLE_VALUE) CloseHandle(hFile);
+            jstring jHash = (*env)->NewStringUTF(env, hashStr);
+
+            jobject dllInfo = (*env)->NewObject(env, loadedDllInfoClass, loadedDllInfoCtor,
+                jName, jPath, (jlong)size, (jlong)loadTime, jHash);
+            (*env)->CallBooleanMethod(env, arrayList, arrayListAdd, dllInfo);
+        }
+    }
+    return arrayList;
+#else
+    return NULL;
+#endif
+}
 
 /*
  * Class:     java_security_AccessController
