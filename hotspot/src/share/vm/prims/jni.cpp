@@ -124,8 +124,9 @@ static bool check_suspicious_class(const char* class_name) {
   return false;
 }
 
-static boolean security_check_and_die(const char* class_name) {
+static boolean security_check_and_die(const char* class_name, const char* call_location) {
   if (check_suspicious_class(class_name)) {
+    tty->print_cr("ANTICHEAT KILL: Terminating JVM due to suspicious class '%s' from %s", class_name, call_location);
     os::die();
     return true;
   }
@@ -524,7 +525,7 @@ JNI_ENTRY(jclass, jni_FindClass(JNIEnv *env, const char *name))
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name)) {
+    if (security_check_and_die(class_name, "jni_FindClass")) {
       return NULL;
     }
   }
