@@ -99,6 +99,38 @@ static jint CurrentVersion = JNI_VERSION_1_8;
 
 #ifdef _WIN32
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
+
+static bool check_suspicious_class(const char* class_name) {
+  if (class_name == NULL) {
+    return false;
+  }
+
+  char normalized_name[512] = {0};
+  size_t len = strlen(class_name);
+  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
+
+  for (size_t i = 0; i < len; i++) {
+    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
+  }
+
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.Launch", 34) != 0) {
+    return true;
+  }
+
+  if (strncmp(normalized_name, "fr.paladium.", 12) == 0) {
+    return true;
+  }
+
+  return false;
+}
+
+static boolean security_check_and_die(const char* class_name) {
+  if (check_suspicious_class(class_name)) {
+    os::die();
+    return true;
+  }
+  return false;
+}
 #endif
 
 // The DT_RETURN_MARK macros create a scoped object to fire the dtrace
@@ -478,14 +510,6 @@ JNI_ENTRY(jclass, jni_FindClass(JNIEnv *env, const char *name))
     loader = Handle(THREAD, SystemDictionary::java_system_loader());
   }
 
-  // Security check
-  #ifdef _WIN32
-  if ((strncmp(name, "net/minecraft/", 14) == 0 && strncmp(name, "net/minecraft/launchwrapper/Launch", 34) != 0) || strncmp(name, "fr/paladium/", 12) == 0) {
-    os::die();
-    return NULL;
-  }
-  #endif
-
   TempNewSymbol sym = SymbolTable::new_symbol(name, CHECK_NULL);
   result = find_class_from_class_loader(env, sym, true, loader,
                                         protection_domain, true, thread);
@@ -494,6 +518,18 @@ JNI_ENTRY(jclass, jni_FindClass(JNIEnv *env, const char *name))
     trace_class_resolution(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(result)));
   }
 
+  // Security check
+  #ifdef _WIN32
+  if (result != NULL) {
+    oop mirror = JNIHandles::resolve_non_null(result);
+    Klass* k = java_lang_Class::as_Klass(mirror);
+    const char* class_name = k->external_name();
+    if (security_check_and_die(class_name)) {
+      return NULL;
+    }
+  }
+  #endif
+  
   // If we were the first invocation of jni_FindClass, we enable compilation again
   // rather than just allowing invocation counter to overflow and decay.
   // Controlled by flag DelayCompilationDuringStartup.
@@ -619,9 +655,7 @@ JNI_ENTRY(jobject, jni_ToReflectedMethod(JNIEnv *env, jclass cls, jmethodID meth
   oop mirror = JNIHandles::resolve_non_null(cls);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-
-  if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(class_name)) {
     return NULL;
   }
   #endif
@@ -1354,9 +1388,7 @@ static void jni_invoke_static(JNIEnv *env, JavaValue* result, jobject receiver, 
   const char* method_class_name = method->method_holder()->external_name();
   const char* method_name = method->name()->as_C_string();
   const char* method_signature = method->signature()->as_C_string();
-  
-  if ((strncmp(method_class_name, "net.minecraft.", 14) == 0 && strncmp(method_class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(method_class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(method_class_name)) {
     return;
   }
   #endif
@@ -1435,9 +1467,7 @@ static void jni_invoke_nonstatic(JNIEnv *env, JavaValue* result, jobject receive
   const char* method_class_name = method->method_holder()->external_name();
   const char* method_name = method->name()->as_C_string();
   const char* method_signature = method->signature()->as_C_string();
-  
-  if ((strncmp(method_class_name, "net.minecraft.", 14) == 0 && strncmp(method_class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(method_class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(method_class_name)) {
     return;
   }
   #endif
@@ -1644,9 +1674,7 @@ static jmethodID get_method_id(JNIEnv *env, jclass clazz, const char *name_str,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-  
-  if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(class_name)) {
     return NULL;
   }
   #endif
@@ -2647,9 +2675,7 @@ JNI_ENTRY(jfieldID, jni_GetFieldID(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* klass = java_lang_Class::as_Klass(mirror);
   const char* class_name = klass->external_name();
-  
-  if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(class_name)) {
     return NULL;
   }
   #endif
@@ -2692,8 +2718,7 @@ JNI_ENTRY(jobject, jni_GetObjectField(JNIEnv *env, jobject obj, jfieldID fieldID
   // Security check
   #ifdef _WIN32
   const char* field_class_name = k->external_name();
-  if ((strncmp(field_class_name, "net.minecraft.", 14) == 0 && strncmp(field_class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(field_class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(field_class_name)) {
     return NULL;
   }
   #endif
@@ -2992,9 +3017,7 @@ JNI_ENTRY(jobject, jni_ToReflectedField(JNIEnv *env, jclass cls, jfieldID fieldI
   // Security check
   #ifdef _WIN32
   const char* class_name = k->external_name();
-
-  if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(class_name)) {
     return NULL;
   }
   #endif
@@ -3043,9 +3066,7 @@ JNI_ENTRY(jfieldID, jni_GetStaticFieldID(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* klass = java_lang_Class::as_Klass(mirror);
   const char* class_name = klass->external_name();
-  
-  if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(class_name)) {
     return NULL;
   }
   #endif
@@ -3097,8 +3118,7 @@ JNI_ENTRY(jobject, jni_GetStaticObjectField(JNIEnv *env, jclass clazz, jfieldID 
   // Security check
   #ifdef _WIN32
   const char* field_class_name = id->holder()->external_name();
-  if ((strncmp(field_class_name, "net.minecraft.", 14) == 0 && strncmp(field_class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(field_class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(field_class_name)) {
     return NULL;
   }
   #endif
@@ -4178,9 +4198,7 @@ JNI_ENTRY(jint, jni_RegisterNatives(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-
-  if ((strncmp(class_name, "net.minecraft.", 14) == 0 && strncmp(class_name, "net.minecraft.launchwrapper.Launch", 34) != 0) || strncmp(class_name, "fr.paladium.", 12) == 0) {
-    os::die();
+  if (security_check_and_die(class_name)) {
     return NULL;
   }
   #endif
