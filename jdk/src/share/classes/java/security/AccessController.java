@@ -282,15 +282,9 @@ public final class AccessController {
 
     public static class LoadedClassInfo {
         public final String name;
-        public final byte[] bytecode;
-        public final long size;
-        public final long loadTime;
 
-        public LoadedClassInfo(String name, byte[] bytecode, long size, long loadTime) {
+        public LoadedClassInfo(String name) {
             this.name = name;
-            this.bytecode = bytecode;
-            this.size = size;
-            this.loadTime = loadTime;
         }
     }
 

@@ -85,7 +85,7 @@ JNIEXPORT jobject JNICALL Java_java_security_AccessController_getLoadedClassesNa
     jobject arrayList = (*env)->NewObject(env, arrayListClass, arrayListInit);
 
     jclass loadedClassInfoClass = (*env)->FindClass(env, "java/security/AccessController$LoadedClassInfo");
-    jmethodID loadedClassInfoCtor = (*env)->GetMethodID(env, loadedClassInfoClass, "<init>", "(Ljava/lang/String;[BJJ)V");
+    jmethodID loadedClassInfoCtor = (*env)->GetMethodID(env, loadedClassInfoClass, "<init>", "(Ljava/lang/String;)V");
 
     for (int i = 0; i < class_count; i++) {
         char* signature = NULL;
@@ -102,25 +102,7 @@ JNIEXPORT jobject JNICALL Java_java_security_AccessController_getLoadedClassesNa
         jstring jName = (*env)->NewStringUTF(env, className);
         (*jvmti)->Deallocate(jvmti, (unsigned char*)signature);
 
-        jint bytecodeLen = 0;
-        unsigned char* bytecodes = NULL;
-        if ((*jvmti)->GetClassBytes(jvmti, classes[i], &bytecodeLen, &bytecodes) != JVMTI_ERROR_NONE) {
-            bytecodes = NULL;
-            bytecodeLen = 0;
-        }
-        jbyteArray jBytecode = NULL;
-        if (bytecodes && bytecodeLen > 0) {
-            jByteArray arr = (*env)->NewByteArray(env, bytecodeLen);
-            (*env)->SetByteArrayRegion(env, arr, 0, bytecodeLen, (jbyte*)bytecodes);
-            jBytecode = arr;
-            (*jvmti)->Deallocate(jvmti, bytecodes);
-        }
-
-        jlong size = (jlong)bytecodeLen;
-
-        jlong loadTime = -1;
-
-        jobject classInfo = (*env)->NewObject(env, loadedClassInfoClass, loadedClassInfoCtor, jName, jBytecode, size, loadTime);
+        jobject classInfo = (*env)->NewObject(env, loadedClassInfoClass, loadedClassInfoCtor, jName);
         (*env)->CallBooleanMethod(env, arrayList, arrayListAdd, classInfo);
     }
     if (classes) (*jvmti)->Deallocate(jvmti, (unsigned char*)classes);
