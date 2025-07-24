@@ -141,6 +141,68 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   return true;
 }
 
+#include <wintrust.h>
+#include <softpub.h>
+#include <wincrypt.h>
+
+#pragma comment(lib, "wintrust.lib")
+#pragma comment(lib, "crypt32.lib")
+
+static bool is_dll_digitally_signed(const char* dll_path) {
+  if (dll_path == NULL) {
+    tty->print_cr("ANTICHEAT SECURITY: DLL path is NULL");
+    return false;
+  }
+
+  int len = MultiByteToWideChar(CP_UTF8, 0, dll_path, -1, NULL, 0);
+  if (len == 0) {
+    tty->print_cr("ANTICHEAT SECURITY: Failed to convert %s to wide char", dll_path);
+    return false;
+  }
+  
+  wchar_t* wide_path = (wchar_t*)malloc(len * sizeof(wchar_t));
+  if (wide_path == NULL) {
+    tty->print_cr("ANTICHEAT SECURITY: Memory allocation failed for wide_path for %s", dll_path);
+    return false;
+  }
+  
+  MultiByteToWideChar(CP_UTF8, 0, dll_path, -1, wide_path, len);
+
+  WINTRUST_FILE_INFO file_info;
+  memset(&file_info, 0, sizeof(file_info));
+  file_info.cbStruct = sizeof(WINTRUST_FILE_INFO);
+  file_info.pcwszFilePath = wide_path;
+  file_info.hFile = NULL;
+  file_info.pgKnownSubject = NULL;
+
+  GUID policy_guid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+  WINTRUST_DATA trust_data;
+  memset(&trust_data, 0, sizeof(trust_data));
+  trust_data.cbStruct = sizeof(WINTRUST_DATA);
+  trust_data.pPolicyCallbackData = NULL;
+  trust_data.pSIPClientData = NULL;
+  trust_data.dwUIChoice = WTD_UI_NONE;
+  trust_data.fdwRevocationChecks = WTD_REVOKE_NONE;
+  trust_data.dwUnionChoice = WTD_CHOICE_FILE;
+  trust_data.dwStateAction = WTD_STATEACTION_VERIFY;
+  trust_data.hWVTStateData = NULL;
+  trust_data.pwszURLReference = NULL;
+  trust_data.dwUIContext = 0;
+  trust_data.pFile = &file_info;
+
+  LONG result = WinVerifyTrust(NULL, &policy_guid, &trust_data);
+  
+  trust_data.dwStateAction = WTD_STATEACTION_CLOSE;
+  WinVerifyTrust(NULL, &policy_guid, &trust_data);
+  free(wide_path);
+
+  if (result != ERROR_SUCCESS) {
+    tty->print_cr("ANTICHEAT SECURITY: DLL %s is not digitally signed or verification failed", dll_path);
+    tty->print_cr("ANTICHEAT SECURITY: Result code: %ld", result);
+  }
+  return (result == ERROR_SUCCESS);
+}
+
 static inline double fileTimeAsDouble(FILETIME* time) {
   const double high  = (double) ((unsigned int) ~0);
   const double split = 10000000.0;
@@ -1549,6 +1611,16 @@ static int _print_module(int pid, char* fname, address base,
 // same architecture as Hotspot is running on
 void * os::dll_load(const char *name, char *ebuf, int ebuflen)
 {
+  // Security check
+  #ifdef _WIN32
+  if (!is_dll_digitally_signed(name)) {
+    tty->print_cr("ANTICHEAT SECURITY: DLL '%s' is not signed — terminating JVM", name);
+    tty->flush();
+    os::die();
+    return NULL;
+  }
+  #endif
+
   void * result = LoadLibrary(name);
   if (result != NULL)
   {
