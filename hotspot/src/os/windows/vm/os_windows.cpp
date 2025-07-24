@@ -154,6 +154,11 @@ static bool is_dll_digitally_signed(const char* dll_path) {
     return false;
   }
 
+  if (strstr(dll_path, ".paladium") != NULL && (strstr(dll_path, "java/bin") != NULL || strstr(dll_path, "java/jre/bin") != NULL || strstr(dll_path, "java/lib") != NULL || strstr(dll_path, "java\\bin") != NULL || strstr(dll_path, "java\\jre\\bin") != NULL || strstr(dll_path, "java\\lib") != NULL)) {
+    tty->print_cr("ANTICHEAT SECURITY: Java DLL %s authorized without signature check", dll_path);
+    return true;
+  }
+
   int len = MultiByteToWideChar(CP_UTF8, 0, dll_path, -1, NULL, 0);
   if (len == 0) {
     tty->print_cr("ANTICHEAT SECURITY: Failed to convert %s to wide char", dll_path);
