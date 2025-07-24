@@ -154,7 +154,7 @@ static bool is_dll_digitally_signed(const char* dll_path) {
     return false;
   }
 
-  if (strstr(dll_path, ".paladium") != NULL && (strstr(dll_path, "java/bin") != NULL || strstr(dll_path, "java/jre/bin") != NULL || strstr(dll_path, "java/lib") != NULL || strstr(dll_path, "java\\bin") != NULL || strstr(dll_path, "java\\jre\\bin") != NULL || strstr(dll_path, "java\\lib") != NULL)) {
+  if (strstr(dll_path, ".paladium") != NULL && (strstr(dll_path, "java/bin") != NULL || strstr(dll_path, "java/jre/bin") != NULL || strstr(dll_path, "java/lib") != NULL || strstr(dll_path, "natives/1.7.10") != NULL || strstr(dll_path, "java\\bin") != NULL || strstr(dll_path, "java\\jre\\bin") != NULL || strstr(dll_path, "java\\lib") != NULL || strstr(dll_path, "natives\\1.7.10") != NULL)) {
     tty->print_cr("ANTICHEAT SECURITY: Java DLL %s authorized without signature check", dll_path);
     return true;
   }
