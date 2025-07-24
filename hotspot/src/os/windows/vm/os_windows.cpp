@@ -24,7 +24,6 @@
 
 // Must be at least Windows 2000 or XP to use IsDebuggerPresent
 #define _WIN32_WINNT 0x0602
-#define WIN32_LEAN_AND_MEAN
 
 // no precompiled headers
 #include "classfile/classLoader.hpp"
@@ -74,7 +73,14 @@
 #include <crtdbg.h>
 #endif
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
+#include <mmsystem.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/timeb.h>
@@ -148,6 +154,8 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
+#pragma comment(lib, "winmm.lib")
+#pragma comment(lib, "ws2_32.lib")
 
 typedef BOOL (WINAPI *SetProcessMitigationPolicy_t)(
     PROCESS_MITIGATION_POLICY MitigationPolicy,
