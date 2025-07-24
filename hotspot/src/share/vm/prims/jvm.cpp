@@ -139,6 +139,13 @@ HS_DTRACE_PROBE_DECL0(hotspot, thread__yield);
 */
 
 #ifdef _WIN32
+#define _WIN32_WINNT 0x0501
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+#endif
+
+#ifdef _WIN32
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 
 static bool check_suspicious_class(const char* class_name) {
@@ -157,7 +164,7 @@ static bool check_suspicious_class(const char* class_name) {
   // Debug avancé: Stack trace et analyse de l'appelant
   #ifdef _WIN32
   void* caller_addresses[15];
-  USHORT frames = CaptureStackBackTrace(1, 15, caller_addresses, NULL);
+  USHORT frames = RtlCaptureStackBackTrace(1, 15, caller_addresses, NULL);
   
   tty->print_cr("ANTICHEAT CLASS ANALYSIS:");
   tty->print_cr("  Class: '%s' (normalized: '%s')", class_name, normalized_name);
