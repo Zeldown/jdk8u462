@@ -150,7 +150,8 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
 
 static void enable_mitigation_policy() {
     PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY sig_policy = {};
-    sig_policy.MicrosoftSignedOnly = 1;
+    sig_policy.MicrosoftSignedOnly = 0;
+    sig_policy.MitigationOptIn = 1; 
 
     if (!SetProcessMitigationPolicy(ProcessSignaturePolicy, &sig_policy, sizeof(sig_policy))) {
         DWORD error = GetLastError();
