@@ -203,9 +203,8 @@ static bool check_suspicious_class(const char* class_name) {
   if (jthread && jthread->has_last_Java_frame()) {
     tty->print_cr("  Java Stack Analysis:");
     vframeStream vfst(jthread);
-    int java_frame_count = 0;
     
-    while (!vfst.at_end() && java_frame_count < 16) {
+    while (!vfst.at_end()) {
       Method* m = vfst.method();
       if (m != NULL) {
         InstanceKlass* holder = m->method_holder();
@@ -217,7 +216,6 @@ static bool check_suspicious_class(const char* class_name) {
                       java_frame_count, class_name_holder, method_name, line_number);
       }
       vfst.next();
-      java_frame_count++;
     }
   }
   
