@@ -1272,16 +1272,6 @@ static jclass jvm_define_class_common(JNIEnv *env, const char *name,
                                                      verify != 0,
                                                      CHECK_NULL);
 
-  // Security check
-  #ifdef _WIN32
-  if (k != NULL) {
-    const char* class_name_str = k->external_name();
-    if (security_check_and_die(class_name_str, "jvm_define_class_common")) {
-      return NULL;
-    }
-  }
-  #endif
-
   if (TraceClassResolution && k != NULL) {
     trace_class_resolution(k);
   }
