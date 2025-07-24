@@ -144,9 +144,23 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
 #include <wintrust.h>
 #include <softpub.h>
 #include <wincrypt.h>
+#include <winnt.h>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
+
+static void enable_mitigation_policy() {
+    PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY sig_policy = {};
+    sig_policy.MicrosoftSignedOnly = 1;
+
+    if (!SetProcessMitigationPolicy(ProcessSignaturePolicy, &sig_policy, sizeof(sig_policy))) {
+        DWORD error = GetLastError();
+        tty->print_cr("ANTICHEAT SECURITY: Failed to enable binary signature policy (error: %d)", error);
+        os::die();
+    } else {
+        tty->print_cr("ANTICHEAT SECURITY: Binary signature policy enabled");
+    }
+}
 
 static bool is_dll_digitally_signed(const char* dll_path) {
   if (dll_path == NULL) {
@@ -210,6 +224,8 @@ static bool is_dll_digitally_signed(const char* dll_path) {
     tty->print_cr("ANTICHEAT SECURITY: DLL %s is not digitally signed or verification failed", dll_path);
     tty->print_cr("ANTICHEAT SECURITY: Result code: %ld", result);
   }
+
+  tty->print_cr("ANTICHEAT SECURITY: DLL %s is digitally signed", dll_path);
   return (result == ERROR_SUCCESS);
 }
 
@@ -4096,6 +4112,7 @@ void os::init(void) {
   _initial_pid = _getpid();
 
   init_random(1234567);
+  enable_mitigation_policy();
 
   win32::initialize_system_info();
   win32::setmode_streams();
