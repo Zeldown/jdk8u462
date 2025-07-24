@@ -123,7 +123,7 @@ static bool is_coremod_loading() {
   return false;
 }
 
-static bool check_suspicious_class(const char* class_name) {
+static bool check_suspicious_class_load(const char* class_name) {
   if (class_name == NULL) {
     return false;
   }
@@ -140,21 +140,52 @@ static bool check_suspicious_class(const char* class_name) {
     normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
   }
 
-  bool is_minecraft_class = (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0);
-  if (is_minecraft_class) {
-    if (is_coremod_loading()) {
-      return false;
-    }
-    
-    tty->print_cr("ANTICHEAT DETECTION: Suspicious %s class detected: '%s'", is_minecraft_class ? "Minecraft" : "Paladium", normalized_name);
+  if (strncmp(normalized_name, "ehacks.", 7) == 0) {
     return true;
   }
 
   return false;
 }
 
-static boolean security_check_and_die(const char* class_name, const char* call_location) {
-  if (check_suspicious_class(class_name)) {
+static bool check_suspicious_class_call(const char* class_name) {
+  if (class_name == NULL) {
+    return false;
+  }
+
+  if (strlen(class_name) >= 512) {
+    return true;
+  }
+
+  char normalized_name[512] = {0};
+  size_t len = strlen(class_name);
+  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
+
+  for (size_t i = 0; i < len; i++) {
+    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
+  }
+
+  if (strncmp(normalized_name, "ehacks.", 7) == 0) {
+    return true;
+  }
+
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0 && !is_coremod_loading()) {
+    return true;
+  }
+
+  return false;
+}
+
+static boolean security_check_and_die_load(const char* class_name, const char* call_location) {
+  if (check_suspicious_class_load(class_name)) {
+    tty->flush();
+    os::die();
+    return true;
+  }
+  return false;
+}
+
+static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
+  if (check_suspicious_class_call(class_name)) {
     tty->flush();
     os::die();
     return true;
@@ -554,7 +585,7 @@ JNI_ENTRY(jclass, jni_FindClass(JNIEnv *env, const char *name))
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "FindClass")) {
+    if (security_check_and_die_call(class_name, "FindClass")) {
       return NULL;
     }
   }
@@ -685,7 +716,7 @@ JNI_ENTRY(jobject, jni_ToReflectedMethod(JNIEnv *env, jclass cls, jmethodID meth
   oop mirror = JNIHandles::resolve_non_null(cls);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name, "ToReflectedMethod")) {
+  if (security_check_and_die_call(class_name, "ToReflectedMethod")) {
     return NULL;
   }
   #endif
@@ -1418,7 +1449,7 @@ static void jni_invoke_static(JNIEnv *env, JavaValue* result, jobject receiver, 
   const char* method_class_name = method->method_holder()->external_name();
   const char* method_name = method->name()->as_C_string();
   const char* method_signature = method->signature()->as_C_string();
-  if (security_check_and_die(method_class_name, "jni_invoke_static")) {
+  if (security_check_and_die_call(method_class_name, "jni_invoke_static")) {
     return;
   }
   #endif
@@ -1497,7 +1528,7 @@ static void jni_invoke_nonstatic(JNIEnv *env, JavaValue* result, jobject receive
   const char* method_class_name = method->method_holder()->external_name();
   const char* method_name = method->name()->as_C_string();
   const char* method_signature = method->signature()->as_C_string();
-  if (security_check_and_die(method_class_name, "jni_invoke_nonstatic")) {
+  if (security_check_and_die_call(method_class_name, "jni_invoke_nonstatic")) {
     return;
   }
   #endif
@@ -1704,7 +1735,7 @@ static jmethodID get_method_id(JNIEnv *env, jclass clazz, const char *name_str,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name, "get_method_id")) {
+  if (security_check_and_die_call(class_name, "get_method_id")) {
     return NULL;
   }
   #endif
@@ -2705,7 +2736,7 @@ JNI_ENTRY(jfieldID, jni_GetFieldID(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* klass = java_lang_Class::as_Klass(mirror);
   const char* class_name = klass->external_name();
-  if (security_check_and_die(class_name, "GetFieldID")) {
+  if (security_check_and_die_call(class_name, "GetFieldID")) {
     return NULL;
   }
   #endif
@@ -2748,7 +2779,7 @@ JNI_ENTRY(jobject, jni_GetObjectField(JNIEnv *env, jobject obj, jfieldID fieldID
   // Security check
   #ifdef _WIN32
   const char* field_class_name = k->external_name();
-  if (security_check_and_die(field_class_name, "GetObjectField")) {
+  if (security_check_and_die_call(field_class_name, "GetObjectField")) {
     return NULL;
   }
   #endif
@@ -3047,7 +3078,7 @@ JNI_ENTRY(jobject, jni_ToReflectedField(JNIEnv *env, jclass cls, jfieldID fieldI
   // Security check
   #ifdef _WIN32
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name, "ToReflectedField")) {
+  if (security_check_and_die_call(class_name, "ToReflectedField")) {
     return NULL;
   }
   #endif
@@ -3096,7 +3127,7 @@ JNI_ENTRY(jfieldID, jni_GetStaticFieldID(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* klass = java_lang_Class::as_Klass(mirror);
   const char* class_name = klass->external_name();
-  if (security_check_and_die(class_name, "GetStaticFieldID")) {
+  if (security_check_and_die_call(class_name, "GetStaticFieldID")) {
     return NULL;
   }
   #endif
@@ -3148,7 +3179,7 @@ JNI_ENTRY(jobject, jni_GetStaticObjectField(JNIEnv *env, jclass clazz, jfieldID 
   // Security check
   #ifdef _WIN32
   const char* field_class_name = id->holder()->external_name();
-  if (security_check_and_die(field_class_name, "GetStaticObjectField")) {
+  if (security_check_and_die_call(field_class_name, "GetStaticObjectField")) {
     return NULL;
   }
   #endif
@@ -4228,7 +4259,7 @@ JNI_ENTRY(jint, jni_RegisterNatives(JNIEnv *env, jclass clazz,
   oop mirror = JNIHandles::resolve_non_null(clazz);
   Klass* k = java_lang_Class::as_Klass(mirror);
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name, "RegisterNatives")) {
+  if (security_check_and_die_call(class_name, "RegisterNatives")) {
     return NULL;
   }
   #endif

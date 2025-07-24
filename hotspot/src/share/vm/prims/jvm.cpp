@@ -164,7 +164,7 @@ static bool is_coremod_loading() {
   return false;
 }
 
-static bool check_suspicious_class(const char* class_name) {
+static bool check_suspicious_class_load(const char* class_name) {
   if (class_name == NULL) {
     return false;
   }
@@ -181,21 +181,52 @@ static bool check_suspicious_class(const char* class_name) {
     normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
   }
 
-  bool is_minecraft_class = (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0);
-  if (is_minecraft_class) {
-    if (is_coremod_loading()) {
-      return false;
-    }
-    
-    tty->print_cr("ANTICHEAT DETECTION: Suspicious %s class detected: '%s'", is_minecraft_class ? "Minecraft" : "Paladium", normalized_name);
+  if (strncmp(normalized_name, "ehacks.", 7) == 0) {
     return true;
   }
 
   return false;
 }
 
-static boolean security_check_and_die(const char* class_name, const char* call_location) {
-  if (check_suspicious_class(class_name)) {
+static bool check_suspicious_class_call(const char* class_name) {
+  if (class_name == NULL) {
+    return false;
+  }
+
+  if (strlen(class_name) >= 512) {
+    return true;
+  }
+
+  char normalized_name[512] = {0};
+  size_t len = strlen(class_name);
+  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
+
+  for (size_t i = 0; i < len; i++) {
+    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
+  }
+
+  if (strncmp(normalized_name, "ehacks.", 7) == 0) {
+    return true;
+  }
+
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0 && !is_coremod_loading()) {
+    return true;
+  }
+
+  return false;
+}
+
+static boolean security_check_and_die_load(const char* class_name, const char* call_location) {
+  if (check_suspicious_class_load(class_name)) {
+    tty->flush();
+    os::die();
+    return true;
+  }
+  return false;
+}
+
+static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
+  if (check_suspicious_class_call(class_name)) {
     tty->flush();
     os::die();
     return true;
@@ -1052,7 +1083,7 @@ JVM_ENTRY(jclass, JVM_FindClassFromBootLoader(JNIEnv* env,
   // Security check
   #ifdef _WIN32
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name, "JVM_FindClassFromBootLoader")) {
+  if (security_check_and_die_call(class_name, "JVM_FindClassFromBootLoader")) {
     return NULL;
   }
   #endif
@@ -1090,7 +1121,7 @@ JVM_ENTRY(jclass, JVM_FindClassFromClassLoader(JNIEnv* env, const char* name,
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "JVM_FindClassFromClassLoader")) {
+    if (security_check_and_die_call(class_name, "JVM_FindClassFromClassLoader")) {
       return NULL;
     }
   }
@@ -1139,7 +1170,7 @@ JVM_ENTRY(jclass, JVM_FindClassFromCaller(JNIEnv* env, const char* name,
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "JVM_FindClassFromCaller")) {
+    if (security_check_and_die_call(class_name, "JVM_FindClassFromCaller")) {
       return NULL;
     }
   }
@@ -1181,7 +1212,7 @@ JVM_ENTRY(jclass, JVM_FindClassFromClass(JNIEnv *env, const char *name,
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "JVM_FindClassFromClass")) {
+    if (security_check_and_die_call(class_name, "JVM_FindClassFromClass")) {
       return NULL;
     }
   }
@@ -1264,6 +1295,16 @@ static jclass jvm_define_class_common(JNIEnv *env, const char *name,
                                                      protection_domain, &st,
                                                      verify != 0,
                                                      CHECK_NULL);
+
+  // Security check
+  #ifdef _WIN32
+  if (k != NULL) {
+    const char* class_name_str = k->external_name();
+    if (security_check_and_die_load(class_name_str, "jvm_define_class_common")) {
+      return NULL;
+    }
+  }
+  #endif
 
   if (TraceClassResolution && k != NULL) {
     trace_class_resolution(k);
@@ -2378,7 +2419,7 @@ JVM_ENTRY(jclass, JVM_ConstantPoolGetClassAt(JNIEnv *env, jobject obj, jobject u
   #ifdef _WIN32
   if (k != NULL) {
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "JVM_ConstantPoolGetClassAt")) {
+    if (security_check_and_die_call(class_name, "JVM_ConstantPoolGetClassAt")) {
       return NULL;
     }
   }
@@ -2403,7 +2444,7 @@ JVM_ENTRY(jclass, JVM_ConstantPoolGetClassAtIfLoaded(JNIEnv *env, jobject obj, j
   // Security check
   #ifdef _WIN32
   const char* class_name = k->external_name();
-  if (security_check_and_die(class_name, "JVM_ConstantPoolGetClassAtIfLoaded")) {
+  if (security_check_and_die_call(class_name, "JVM_ConstantPoolGetClassAtIfLoaded")) {
     return NULL;
   }
   #endif
@@ -4001,7 +4042,7 @@ JVM_ENTRY(jclass, JVM_LoadClass0(JNIEnv *env, jobject receiver,
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "JVM_LoadClass0")) {
+    if (security_check_and_die_call(class_name, "JVM_LoadClass0")) {
       return NULL;
     }
   }
