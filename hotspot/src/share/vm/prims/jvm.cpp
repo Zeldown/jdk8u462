@@ -154,10 +154,86 @@ static bool check_suspicious_class(const char* class_name) {
     normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
   }
 
+  // Debug avancé: Stack trace et analyse de l'appelant
+  #ifdef _WIN32
+  void* caller_addresses[15];
+  USHORT frames = CaptureStackBackTrace(1, 15, caller_addresses, NULL);
+  
+  tty->print_cr("ANTICHEAT CLASS ANALYSIS:");
+  tty->print_cr("  Class: '%s' (normalized: '%s')", class_name, normalized_name);
+  tty->print_cr("  Stack depth: %d frames", frames);
+  
+  // Analyser les modules dans la stack
+  for (int i = 0; i < frames && i < 8; i++) {
+    HMODULE module = NULL;
+    char module_name[MAX_PATH] = "Unknown";
+    char module_path[MAX_PATH] = "Unknown";
+    
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, 
+                          (LPCSTR)caller_addresses[i], &module)) {
+      GetModuleFileNameA(module, module_path, MAX_PATH);
+      GetModuleBaseNameA(GetCurrentProcess(), module, module_name, MAX_PATH);
+    }
+    
+    tty->print_cr("    [%d] 0x%p -> %s (%s)", i, caller_addresses[i], module_name, module_path);
+  }
+  
+  // Analyser le thread courant
+  JavaThread* jthread = JavaThread::current();
+  if (jthread && jthread->has_last_Java_frame()) {
+    tty->print_cr("  Java Stack Analysis:");
+    vframeStream vfst(jthread);
+    int java_frame_count = 0;
+    
+    while (!vfst.at_end() && java_frame_count < 5) {
+      Method* m = vfst.method();
+      if (m != NULL) {
+        InstanceKlass* holder = m->method_holder();
+        const char* class_name_holder = holder ? holder->external_name() : "Unknown";
+        const char* method_name = m->name() ? m->name()->as_C_string() : "Unknown";
+        int line_number = m->line_number_from_bci(vfst.bci());
+        
+        tty->print_cr("    Java[%d] %s::%s (line %d)", 
+                      java_frame_count, class_name_holder, method_name, line_number);
+      }
+      vfst.next();
+      java_frame_count++;
+    }
+  }
+  
+  // Analyser le contexte de ClassLoader
+  if (jthread && jthread->has_last_Java_frame()) {
+    vframeStream vfst_loader(jthread);
+    tty->print_cr("  ClassLoader Context:");
+    
+    while (!vfst_loader.at_end()) {
+      Method* m = vfst_loader.method();
+      if (m != NULL && m->method_holder() != NULL) {
+        InstanceKlass* holder = m->method_holder();
+        const char* holder_name = holder->external_name();
+        
+        // Chercher les méthodes de classloading
+        if (strstr(holder_name, "ClassLoader") || 
+            strstr(holder_name, "URLClassLoader") ||
+            strstr(holder_name, "LaunchClassLoader") ||
+            strstr(m->name()->as_C_string(), "loadClass") ||
+            strstr(m->name()->as_C_string(), "defineClass")) {
+          
+          tty->print_cr("    Loader: %s::%s", holder_name, m->name()->as_C_string());
+          break;
+        }
+      }
+      vfst_loader.next();
+    }
+  }
+  
+  tty->print_cr("  --- End Analysis ---");
+  #endif
+
   // Debug: Log toutes les classes vérifiées
   tty->print_cr("ANTICHEAT DEBUG: Checking class '%s' (normalized: '%s')", class_name, normalized_name);
 
-    if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
     tty->print_cr("ANTICHEAT DETECTION: Suspicious Minecraft class detected: '%s'", normalized_name);
     return true;
   }
