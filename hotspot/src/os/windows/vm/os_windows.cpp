@@ -127,6 +127,7 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   switch (reason) {
     case DLL_PROCESS_ATTACH:
       vm_lib_handle = hinst;
+      enable_mitigation_policy();
       if(ForceTimeHighResolution)
         timeBeginPeriod(1L);
       break;
@@ -149,17 +150,33 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
 #pragma comment(lib, "crypt32.lib")
 
 static void enable_mitigation_policy() {
-    PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY sig_policy = {};
-    sig_policy.MicrosoftSignedOnly = 0;
-    sig_policy.MitigationOptIn = 1; 
-
-    if (!SetProcessMitigationPolicy(ProcessSignaturePolicy, &sig_policy, sizeof(sig_policy))) {
+    PROCESS_MITIGATION_DYNAMIC_CODE_POLICY code_policy = {};
+    code_policy.MitigationOptIn = 1;
+    code_policy.ProhibitDynamicCode = 1;
+    
+    if (!SetProcessMitigationPolicy(ProcessDynamicCodePolicy, &code_policy, sizeof(code_policy))) {
         DWORD error = GetLastError();
-        tty->print_cr("ANTICHEAT SECURITY: Failed to enable binary signature policy (error: %d)", error);
+        tty->print_cr("ANTICHEAT SECURITY: Failed to enable dynamic code policy (error: %d)", error);
+        tty->flush();
         os::die();
-    } else {
-        tty->print_cr("ANTICHEAT SECURITY: Binary signature policy enabled");
+        return;
     }
+    
+    PROCESS_MITIGATION_IMAGE_LOAD_POLICY load_policy = {};
+    load_policy.MitigationOptIn = 1;
+    load_policy.NoRemoteImages = 1;
+    load_policy.NoLowMandatoryLabelImages = 1;
+    
+    if (!SetProcessMitigationPolicy(ProcessImageLoadPolicy, &load_policy, sizeof(load_policy))) {
+        DWORD error = GetLastError();
+        tty->print_cr("ANTICHEAT SECURITY: Failed to enable image load policy (error: %d)", error);
+        tty->flush();
+        os::die();
+        return;
+    }
+
+    tty->print_cr("ANTICHEAT SECURITY: Mitigation policies enabled successfully");
+    tty->flush();
 }
 
 static bool is_dll_digitally_signed(const char* dll_path) {
@@ -4112,7 +4129,6 @@ void os::init(void) {
   _initial_pid = _getpid();
 
   init_random(1234567);
-  enable_mitigation_policy();
 
   win32::initialize_system_info();
   win32::setmode_streams();
