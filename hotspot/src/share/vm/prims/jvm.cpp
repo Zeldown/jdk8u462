@@ -153,23 +153,13 @@ static bool is_coremod_loading() {
         InstanceKlass* holder = m->method_holder();
         const char* class_name_holder = holder->external_name();
         const char* method_name = m->name() ? m->name()->as_C_string() : "Unknown";
-        
-        tty->print_cr("ANTICHEAT DEBUG:   Frame %d: %s::%s", frame_count, class_name_holder, method_name);
-
         if (strcmp(class_name_holder, "net.minecraft.launchwrapper.Launch") == 0) {
-          tty->print_cr("ANTICHEAT DEBUG: Found Launch class in stack - authorizing CoreMod loading");
           return true;
         }
-      } else {
-        tty->print_cr("ANTICHEAT DEBUG:   Frame %d: <null method or holder>", frame_count);
       }
       vfst.next();
       frame_count++;
     }
-    
-    tty->print_cr("ANTICHEAT DEBUG: No Launch class found in %d frames - denying CoreMod loading", frame_count);
-  } else {
-    tty->print_cr("ANTICHEAT DEBUG: No Java frames available for stack analysis");
   }
   return false;
 }
@@ -191,13 +181,9 @@ static bool check_suspicious_class(const char* class_name) {
     normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
   }
 
-  tty->print_cr("ANTICHEAT DEBUG: Checking class '%s' (normalized: '%s')", class_name, normalized_name);
-
   bool is_minecraft_class = (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0);
-
   if (is_minecraft_class) {
     if (is_coremod_loading()) {
-      tty->print_cr("ANTICHEAT DEBUG: %s class '%s' authorized - CoreModManager::loadCoreMod detected", is_minecraft_class ? "Minecraft" : "Paladium", normalized_name);
       return false;
     }
     
@@ -209,10 +195,7 @@ static bool check_suspicious_class(const char* class_name) {
 }
 
 static boolean security_check_and_die(const char* class_name, const char* call_location) {
-  tty->print_cr("ANTICHEAT DEBUG: security_check_and_die called from %s with class '%s'", call_location, class_name ? class_name : "NULL");
-  
   if (check_suspicious_class(class_name)) {
-    tty->print_cr("ANTICHEAT KILL: Terminating JVM due to suspicious class '%s' detected at %s", class_name, call_location);
     tty->flush();
     os::die();
     return true;
@@ -1354,16 +1337,6 @@ JVM_ENTRY(jclass, JVM_FindLoadedClass(JNIEnv *env, jobject loader, jstring name)
     k = ik();
   }
 #endif
-
-  // Security check
-  #ifdef _WIN32
-  if (k != NULL) {
-    const char* class_name = k->external_name();
-    if (security_check_and_die(class_name, "JVM_FindLoadedClass")) {
-      return NULL;
-    }
-  }
-  #endif
 
   return (k == NULL) ? NULL :
             (jclass) JNIHandles::make_local(env, k->java_mirror());
