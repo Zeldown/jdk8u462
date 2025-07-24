@@ -23,7 +23,8 @@
  */
 
 // Must be at least Windows 2000 or XP to use IsDebuggerPresent
-#define _WIN32_WINNT 0x500
+#define _WIN32_WINNT 0x0602
+#define WIN32_LEAN_AND_MEAN
 
 // no precompiled headers
 #include "classfile/classLoader.hpp"
@@ -72,9 +73,6 @@
 #ifdef _DEBUG
 #include <crtdbg.h>
 #endif
-
-#define _WIN32_WINNT 0x0602
-#define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
 #include <winnt.h>
