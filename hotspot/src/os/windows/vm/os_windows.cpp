@@ -73,8 +73,10 @@
 #include <crtdbg.h>
 #endif
 
+#define _WIN32_WINNT 0x0602
 
 #include <windows.h>
+#include <winnt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/timeb.h>
@@ -144,7 +146,6 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
 #include <wintrust.h>
 #include <softpub.h>
 #include <wincrypt.h>
-#include <winnt.h>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
