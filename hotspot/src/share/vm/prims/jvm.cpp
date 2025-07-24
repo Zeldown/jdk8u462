@@ -194,9 +194,8 @@ static bool check_suspicious_class(const char* class_name) {
   tty->print_cr("ANTICHEAT DEBUG: Checking class '%s' (normalized: '%s')", class_name, normalized_name);
 
   bool is_minecraft_class = (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0);
-  bool is_paladium_class = (strncmp(normalized_name, "fr.paladium.", 12) == 0 && strncmp(normalized_name, "fr.paladium.palaforge.", 22) != 0);
 
-  if ((is_minecraft_class) || is_paladium_class) {
+  if (is_minecraft_class) {
     if (is_coremod_loading()) {
       tty->print_cr("ANTICHEAT DEBUG: %s class '%s' authorized - CoreModManager::loadCoreMod detected", is_minecraft_class ? "Minecraft" : "Paladium", normalized_name);
       return false;

@@ -105,17 +105,30 @@ static bool is_coremod_loading() {
   if (jthread && jthread->has_last_Java_frame()) {
     vframeStream vfst(jthread);
     
+    int frame_count = 0;
     while (!vfst.at_end()) {
       Method* m = vfst.method();
       if (m != NULL && m->method_holder() != NULL) {
         InstanceKlass* holder = m->method_holder();
         const char* class_name_holder = holder->external_name();
+        const char* method_name = m->name() ? m->name()->as_C_string() : "Unknown";
+        
+        tty->print_cr("ANTICHEAT DEBUG:   Frame %d: %s::%s", frame_count, class_name_holder, method_name);
+
         if (strcmp(class_name_holder, "net.minecraft.launchwrapper.Launch") == 0) {
+          tty->print_cr("ANTICHEAT DEBUG: Found Launch class in stack - authorizing CoreMod loading");
           return true;
         }
+      } else {
+        tty->print_cr("ANTICHEAT DEBUG:   Frame %d: <null method or holder>", frame_count);
       }
       vfst.next();
+      frame_count++;
     }
+    
+    tty->print_cr("ANTICHEAT DEBUG: No Launch class found in %d frames - denying CoreMod loading", frame_count);
+  } else {
+    tty->print_cr("ANTICHEAT DEBUG: No Java frames available for stack analysis");
   }
   return false;
 }
@@ -140,9 +153,8 @@ static bool check_suspicious_class(const char* class_name) {
   tty->print_cr("ANTICHEAT DEBUG: Checking class '%s' (normalized: '%s')", class_name, normalized_name);
 
   bool is_minecraft_class = (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0);
-  bool is_paladium_class = (strncmp(normalized_name, "fr.paladium.", 12) == 0 && strncmp(normalized_name, "fr.paladium.palaforge.", 22) != 0);
 
-  if ((is_minecraft_class) || is_paladium_class) {
+  if (is_minecraft_class) {
     if (is_coremod_loading()) {
       tty->print_cr("ANTICHEAT DEBUG: %s class '%s' authorized - CoreModManager::loadCoreMod detected", is_minecraft_class ? "Minecraft" : "Paladium", normalized_name);
       return false;
