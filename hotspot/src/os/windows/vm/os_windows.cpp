@@ -73,14 +73,8 @@
 #include <crtdbg.h>
 #endif
 
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #include <windows.h>
-#include <mmsystem.h>
+#include <winnt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/timeb.h>
@@ -97,11 +91,6 @@
 #include <imagehlp.h>             // For os::dll_address_to_function_name
 /* for enumerating dll libraries */
 #include <vdmdbg.h>
-
-#include <wintrust.h>
-#include <softpub.h>
-#include <wincrypt.h>
-#include <winnt.h>
 
 // for timer info max values which include all bits
 #define ALL_64_BITS CONST64(0xFFFFFFFFFFFFFFFF)
@@ -152,41 +141,20 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   return true;
 }
 
+#include <wintrust.h>
+#include <softpub.h>
+#include <wincrypt.h>
+
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
-#pragma comment(lib, "winmm.lib")
-#pragma comment(lib, "ws2_32.lib")
-
-typedef BOOL (WINAPI *SetProcessMitigationPolicy_t)(
-    PROCESS_MITIGATION_POLICY MitigationPolicy,
-    PVOID lpBuffer,
-    SIZE_T dwLength
-);
 
 static void enable_mitigation_policy() {
-    HMODULE hKernel32 = GetModuleHandleA("kernel32.dll");
-    if (!hKernel32) {
-        tty->print_cr("ANTICHEAT SECURITY: kernel32.dll not loaded");
-        tty->flush();
-        os::die();
-        return;
-    }
-
-    SetProcessMitigationPolicy_t set_policy = (SetProcessMitigationPolicy_t) GetProcAddress(hKernel32, "SetProcessMitigationPolicy");
-    if (!set_policy) {
-        tty->print_cr("ANTICHEAT SECURITY: SetProcessMitigationPolicy not available (Windows < 8?)");
-        tty->flush();
-        os::die();
-        return;
-    }
-
     PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY sig_policy = {};
     sig_policy.MicrosoftSignedOnly = 1;
 
-    if (!set_policy(ProcessSignaturePolicy, &sig_policy, sizeof(sig_policy))) {
+    if (!SetProcessMitigationPolicy(ProcessSignaturePolicy, &sig_policy, sizeof(sig_policy))) {
         DWORD error = GetLastError();
         tty->print_cr("ANTICHEAT SECURITY: Failed to enable binary signature policy (error: %d)", error);
-        tty->flush();
         os::die();
     } else {
         tty->print_cr("ANTICHEAT SECURITY: Binary signature policy enabled");

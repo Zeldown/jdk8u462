@@ -24,15 +24,6 @@
 
 #ifndef OS_WINDOWS_VM_OS_WINDOWS_HPP
 #define OS_WINDOWS_VM_OS_WINDOWS_HPP
-
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
-
 // Win32_OS defines the interface to windows operating systems
 
 // Information about the protection of the page at address '0' on this os.
