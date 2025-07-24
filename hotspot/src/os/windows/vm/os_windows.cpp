@@ -75,7 +75,6 @@
 #endif
 
 #include <windows.h>
-#include <winnt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/timeb.h>
@@ -92,6 +91,11 @@
 #include <imagehlp.h>             // For os::dll_address_to_function_name
 /* for enumerating dll libraries */
 #include <vdmdbg.h>
+
+#include <wintrust.h>
+#include <softpub.h>
+#include <wincrypt.h>
+#include <winnt.h>
 
 // for timer info max values which include all bits
 #define ALL_64_BITS CONST64(0xFFFFFFFFFFFFFFFF)
@@ -141,10 +145,6 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   }
   return true;
 }
-
-#include <wintrust.h>
-#include <softpub.h>
-#include <wincrypt.h>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
