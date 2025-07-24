@@ -159,6 +159,11 @@ static bool is_dll_digitally_signed(const char* dll_path) {
     return true;
   }
 
+  if ((strstr(dll_path, "/Temp/jna-")|| strstr(dll_path, "\\Temp\\jna-")) != NULL && (strstr(dll_path, "\\jna") != NULL || strstr(dll_path, "/jna") != NULL) && strstr(dll_path, ".dll") != NULL) {
+    tty->print_cr("ANTICHEAT SECURITY: JNA temporary DLL %s authorized without signature check", dll_path);
+    return true;
+  }
+
   int len = MultiByteToWideChar(CP_UTF8, 0, dll_path, -1, NULL, 0);
   if (len == 0) {
     tty->print_cr("ANTICHEAT SECURITY: Failed to convert %s to wide char", dll_path);
