@@ -22,6 +22,7 @@
  *
  */
 
+#define _WIN32_WINNT 0x0601
 #include "precompiled.hpp"
 #include "classfile/classLoader.hpp"
 #include "classfile/classLoaderData.inline.hpp"
@@ -139,10 +140,20 @@ HS_DTRACE_PROBE_DECL0(hotspot, thread__yield);
 */
 
 #ifdef _WIN32
-#define _WIN32_WINNT 0x0501
 #include <windows.h>
+#include <psapi.h>
 #include <dbghelp.h>
+#pragma comment(lib, "psapi.lib")
 #pragma comment(lib, "dbghelp.lib")
+
+#ifndef RtlCaptureStackBackTrace
+extern "C" USHORT WINAPI RtlCaptureStackBackTrace(
+    ULONG FramesToSkip,
+    ULONG FramesToCapture,
+    PVOID *BackTrace,
+    PULONG BackTraceHash
+);
+#endif
 #endif
 
 #ifdef _WIN32
