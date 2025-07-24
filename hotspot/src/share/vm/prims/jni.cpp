@@ -100,53 +100,6 @@ static jint CurrentVersion = JNI_VERSION_1_8;
 #ifdef _WIN32
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 
-static bool is_coremod_loading() {
-  JavaThread* jthread = JavaThread::current();
-  if (jthread && jthread->has_last_Java_frame()) {
-    vframeStream vfst(jthread);
-    
-    int frame_count = 0;
-    while (!vfst.at_end()) {
-      Method* m = vfst.method();
-      if (m != NULL && m->method_holder() != NULL) {
-        InstanceKlass* holder = m->method_holder();
-        const char* class_name_holder = holder->external_name();
-        const char* method_name = m->name() ? m->name()->as_C_string() : "Unknown";
-        if (strcmp(class_name_holder, "net.minecraft.launchwrapper.Launch") == 0) {
-          return true;
-        }
-      }
-      vfst.next();
-      frame_count++;
-    }
-  }
-  return false;
-}
-
-static bool check_suspicious_class_load(const char* class_name) {
-  if (class_name == NULL) {
-    return false;
-  }
-
-  if (strlen(class_name) >= 512) {
-    return true;
-  }
-
-  char normalized_name[512] = {0};
-  size_t len = strlen(class_name);
-  len = (len >= sizeof(normalized_name)) ? sizeof(normalized_name) - 1 : len;
-
-  for (size_t i = 0; i < len; i++) {
-    normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
-  }
-
-  if (strncmp(normalized_name, "ehacks.", 7) == 0) {
-    return true;
-  }
-
-  return false;
-}
-
 static bool check_suspicious_class_call(const char* class_name) {
   if (class_name == NULL) {
     return false;
@@ -164,23 +117,10 @@ static bool check_suspicious_class_call(const char* class_name) {
     normalized_name[i] = (class_name[i] == '/') ? '.' : class_name[i];
   }
 
-  if (strncmp(normalized_name, "ehacks.", 7) == 0) {
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
     return true;
   }
 
-  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0 && !is_coremod_loading()) {
-    return true;
-  }
-
-  return false;
-}
-
-static boolean security_check_and_die_load(const char* class_name, const char* call_location) {
-  if (check_suspicious_class_load(class_name)) {
-    tty->flush();
-    os::die();
-    return true;
-  }
   return false;
 }
 

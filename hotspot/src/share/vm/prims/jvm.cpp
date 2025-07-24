@@ -141,29 +141,6 @@ HS_DTRACE_PROBE_DECL0(hotspot, thread__yield);
 #ifdef _WIN32
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 
-static bool is_coremod_loading() {
-  JavaThread* jthread = JavaThread::current();
-  if (jthread && jthread->has_last_Java_frame()) {
-    vframeStream vfst(jthread);
-    
-    int frame_count = 0;
-    while (!vfst.at_end()) {
-      Method* m = vfst.method();
-      if (m != NULL && m->method_holder() != NULL) {
-        InstanceKlass* holder = m->method_holder();
-        const char* class_name_holder = holder->external_name();
-        const char* method_name = m->name() ? m->name()->as_C_string() : "Unknown";
-        if (strcmp(class_name_holder, "net.minecraft.launchwrapper.Launch") == 0) {
-          return true;
-        }
-      }
-      vfst.next();
-      frame_count++;
-    }
-  }
-  return false;
-}
-
 static bool check_suspicious_class_load(const char* class_name) {
   if (class_name == NULL) {
     return false;
@@ -209,7 +186,7 @@ static bool check_suspicious_class_call(const char* class_name) {
     return true;
   }
 
-  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0 && !is_coremod_loading()) {
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
     return true;
   }
 
@@ -4043,6 +4020,10 @@ JVM_ENTRY(jclass, JVM_LoadClass0(JNIEnv *env, jobject receiver,
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
     if (security_check_and_die_call(class_name, "JVM_LoadClass0")) {
+      return NULL;
+    }
+
+    if (security_check_and_die_load(class_name, "JVM_LoadClass0")) {
       return NULL;
     }
   }
