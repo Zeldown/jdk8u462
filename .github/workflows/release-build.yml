@@ -83,6 +83,7 @@ jobs:
     name: Linux x64 Build
     runs-on: "ubuntu-22.04"
     needs: prerequisites
+    if: github.event_name == 'workflow_dispatch' || endsWith(github.event.release.tag_name, '-all')
 
     env:
       JDK_VERSION: ${{ needs.prerequisites.outputs.version }}
@@ -323,6 +324,7 @@ jobs:
     name: macOS x64 Build
     runs-on: "macos-13"
     needs: prerequisites
+    if: github.event_name == 'workflow_dispatch' || endsWith(github.event.release.tag_name, '-all')
 
     env:
       JDK_VERSION: ${{ needs.prerequisites.outputs.version }}
