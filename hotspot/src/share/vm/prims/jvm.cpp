@@ -205,7 +205,7 @@ static bool check_suspicious_class(const char* class_name) {
     vframeStream vfst(jthread);
     int java_frame_count = 0;
     
-    while (!vfst.at_end() && java_frame_count < 5) {
+    while (!vfst.at_end() && java_frame_count < 16) {
       Method* m = vfst.method();
       if (m != NULL) {
         InstanceKlass* holder = m->method_holder();
