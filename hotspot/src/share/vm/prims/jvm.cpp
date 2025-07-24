@@ -141,9 +141,35 @@ HS_DTRACE_PROBE_DECL0(hotspot, thread__yield);
 #ifdef _WIN32
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 
+static bool is_coremod_loading() {
+  JavaThread* jthread = JavaThread::current();
+  if (jthread && jthread->has_last_Java_frame()) {
+    vframeStream vfst(jthread);
+    
+    while (!vfst.at_end()) {
+      Method* m = vfst.method();
+      if (m != NULL && m->method_holder() != NULL) {
+        InstanceKlass* holder = m->method_holder();
+        const char* class_name_holder = holder->external_name();
+        const char* method_name = m->name() ? m->name()->as_C_string() : "Unknown";
+
+        if (strcmp(class_name_holder, "net.minecraft.launchwrapper.Launch") == 0) {
+          return true;
+        }
+      }
+      vfst.next();
+    }
+  }
+  return false;
+}
+
 static bool check_suspicious_class(const char* class_name) {
   if (class_name == NULL) {
     return false;
+  }
+
+  if (strlen(class_name) >= 512) {
+    return true;
   }
 
   char normalized_name[512] = {0};
@@ -156,13 +182,16 @@ static bool check_suspicious_class(const char* class_name) {
 
   tty->print_cr("ANTICHEAT DEBUG: Checking class '%s' (normalized: '%s')", class_name, normalized_name);
 
-  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
-    tty->print_cr("ANTICHEAT DETECTION: Suspicious Minecraft class detected: '%s'", normalized_name);
-    return true;
-  }
+  bool is_minecraft_class = (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0);
+  bool is_paladium_class = (strncmp(normalized_name, "fr.paladium.", 12) == 0);
 
-  if (strncmp(normalized_name, "fr.paladium.", 12) == 0) {
-    tty->print_cr("ANTICHEAT DETECTION: Suspicious Paladium class detected: '%s'", normalized_name);
+  if ((is_minecraft_class) || is_paladium_class) {
+    if (is_coremod_loading()) {
+      tty->print_cr("ANTICHEAT DEBUG: %s class '%s' authorized - CoreModManager::loadCoreMod detected", is_minecraft_class ? "Minecraft" : "Paladium", normalized_name);
+      return false;
+    }
+    
+    tty->print_cr("ANTICHEAT DETECTION: Suspicious %s class detected: '%s'", is_minecraft_class ? "Minecraft" : "Paladium", normalized_name);
     return true;
   }
 
@@ -1242,6 +1271,17 @@ static jclass jvm_define_class_common(JNIEnv *env, const char *name,
                                                      protection_domain, &st,
                                                      verify != 0,
                                                      CHECK_NULL);
+
+  // Security check
+  #ifdef _WIN32
+  if (k != NULL) {
+    const char* class_name_str = k->external_name();
+    if (security_check_and_die(class_name_str, "jvm_define_class_common")) {
+      return NULL;
+    }
+  }
+  #endif
+
   if (TraceClassResolution && k != NULL) {
     trace_class_resolution(k);
   }
