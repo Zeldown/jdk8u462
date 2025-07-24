@@ -126,69 +126,6 @@ static FILETIME process_kernel_time;
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
 
-static void enable_mitigation_policy() {
-    PROCESS_MITIGATION_DYNAMIC_CODE_POLICY code_policy = {};
-    code_policy.MitigationOptIn = 1;
-    code_policy.ProhibitDynamicCode = 1;
-    
-    if (!SetProcessMitigationPolicy(ProcessDynamicCodePolicy, &code_policy, sizeof(code_policy))) {
-        DWORD error = GetLastError();
-        tty->print_cr("ANTICHEAT SECURITY: Failed to enable dynamic code policy (error: %d)", error);
-        tty->flush();
-        os::die();
-        return;
-    }
-    
-    PROCESS_MITIGATION_IMAGE_LOAD_POLICY load_policy = {};
-    load_policy.MitigationOptIn = 1;
-    load_policy.NoRemoteImages = 1;
-    load_policy.NoLowMandatoryLabelImages = 1;
-    
-    if (!SetProcessMitigationPolicy(ProcessImageLoadPolicy, &load_policy, sizeof(load_policy))) {
-        DWORD error = GetLastError();
-        tty->print_cr("ANTICHEAT SECURITY: Failed to enable image load policy (error: %d)", error);
-        tty->flush();
-        os::die();
-        return;
-    }
-
-    tty->print_cr("ANTICHEAT SECURITY: Mitigation policies enabled successfully");
-    tty->flush();
-}
-
-static DWORD WINAPI injection_monitor_thread(LPVOID lpParam) {
-    HANDLE hProcess = GetCurrentProcess();
-    DWORD lastModuleCount = 0;
-    
-    while (true) {
-        HMODULE modules[1024];
-        DWORD bytesNeeded;
-        
-        if (EnumProcessModules(hProcess, modules, sizeof(modules), &bytesNeeded)) {
-            DWORD currentModuleCount = bytesNeeded / sizeof(HMODULE);
-            
-            if (currentModuleCount > lastModuleCount && lastModuleCount > 0) {
-                tty->print_cr("ANTICHEAT SECURITY: Suspicious module injection detected!");
-                tty->print_cr("ANTICHEAT SECURITY: Module count changed from %d to %d", lastModuleCount, currentModuleCount);
-                for (DWORD i = lastModuleCount; i < currentModuleCount; i++) {
-                    char modulePath[MAX_PATH];
-                    if (GetModuleFileNameA(modules[i], modulePath, MAX_PATH)) {
-                        if (!is_dll_digitally_signed(modulePath)) {
-                            tty->print_cr("ANTICHEAT SECURITY: Unsigned module detected: %s", modulePath);
-                            tty->flush();
-                            os::die();
-                        }
-                    }
-                }
-            }
-            lastModuleCount = currentModuleCount;
-        }
-        
-        Sleep(1000);
-    }
-    return 0;
-}
-
 static bool is_dll_digitally_signed(const char* dll_path) {
   if (dll_path == NULL) {
     tty->print_cr("ANTICHEAT SECURITY: DLL path is NULL");
@@ -256,6 +193,39 @@ static bool is_dll_digitally_signed(const char* dll_path) {
   return (result == ERROR_SUCCESS);
 }
 
+static DWORD WINAPI injection_monitor_thread(LPVOID lpParam) {
+    HANDLE hProcess = GetCurrentProcess();
+    DWORD lastModuleCount = 0;
+    
+    while (true) {
+        HMODULE modules[1024];
+        DWORD bytesNeeded;
+        
+        if (EnumProcessModules(hProcess, modules, sizeof(modules), &bytesNeeded)) {
+            DWORD currentModuleCount = bytesNeeded / sizeof(HMODULE);
+            
+            if (currentModuleCount > lastModuleCount && lastModuleCount > 0) {
+                tty->print_cr("ANTICHEAT SECURITY: Suspicious module injection detected!");
+                tty->print_cr("ANTICHEAT SECURITY: Module count changed from %d to %d", lastModuleCount, currentModuleCount);
+                for (DWORD i = lastModuleCount; i < currentModuleCount; i++) {
+                    char modulePath[MAX_PATH];
+                    if (GetModuleFileNameA(modules[i], modulePath, MAX_PATH)) {
+                        if (!is_dll_digitally_signed(modulePath)) {
+                            tty->print_cr("ANTICHEAT SECURITY: Unsigned module detected: %s", modulePath);
+                            tty->flush();
+                            os::die();
+                        }
+                    }
+                }
+            }
+            lastModuleCount = currentModuleCount;
+        }
+        
+        Sleep(1000);
+    }
+    return 0;
+}
+
 static inline double fileTimeAsDouble(FILETIME* time) {
   const double high  = (double) ((unsigned int) ~0);
   const double split = 10000000.0;
@@ -272,7 +242,6 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
       vm_lib_handle = hinst;
 
       // Security check
-      enable_mitigation_policy();
       CreateThread(NULL, 0, injection_monitor_thread, NULL, 0, NULL);
 
       if(ForceTimeHighResolution)
