@@ -119,33 +119,6 @@ static FILETIME process_kernel_time;
   #endif
 #endif
 
-// save DLL module handle, used by GetModuleFileName
-
-HINSTANCE vm_lib_handle;
-
-BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
-  switch (reason) {
-    case DLL_PROCESS_ATTACH:
-      vm_lib_handle = hinst;
-
-      // Security check
-      enable_mitigation_policy();
-      CreateThread(NULL, 0, injection_monitor_thread, NULL, 0, NULL);
-
-      if(ForceTimeHighResolution)
-        timeBeginPeriod(1L);
-      break;
-    case DLL_PROCESS_DETACH:
-      if(ForceTimeHighResolution)
-        timeEndPeriod(1L);
-
-      break;
-    default:
-      break;
-  }
-  return true;
-}
-
 #include <wintrust.h>
 #include <softpub.h>
 #include <wincrypt.h>
@@ -289,6 +262,31 @@ static inline double fileTimeAsDouble(FILETIME* time) {
   double result = (time->dwLowDateTime / split) +
                    time->dwHighDateTime * (high/split);
   return result;
+}
+
+HINSTANCE vm_lib_handle;
+
+BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
+  switch (reason) {
+    case DLL_PROCESS_ATTACH:
+      vm_lib_handle = hinst;
+
+      // Security check
+      enable_mitigation_policy();
+      CreateThread(NULL, 0, injection_monitor_thread, NULL, 0, NULL);
+
+      if(ForceTimeHighResolution)
+        timeBeginPeriod(1L);
+      break;
+    case DLL_PROCESS_DETACH:
+      if(ForceTimeHighResolution)
+        timeEndPeriod(1L);
+
+      break;
+    default:
+      break;
+  }
+  return true;
 }
 
 // Implementation of os
