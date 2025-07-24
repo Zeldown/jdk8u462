@@ -195,8 +195,6 @@ static bool check_suspicious_class_call(const char* class_name) {
 
 static boolean security_check_and_die_load(const char* class_name, const char* call_location) {
   if (check_suspicious_class_load(class_name)) {
-    tty->print_cr("ANTICHEAT SECURITY: Class '%s' loaded from %s", class_name, call_location);
-    tty->flush();
     os::die();
     return true;
   }
@@ -205,8 +203,6 @@ static boolean security_check_and_die_load(const char* class_name, const char* c
 
 static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
   if (check_suspicious_class_call(class_name)) {
-    tty->print_cr("ANTICHEAT SECURITY: Class '%s' called from %s", class_name, call_location);
-    tty->flush();
     os::die();
     return true;
   }

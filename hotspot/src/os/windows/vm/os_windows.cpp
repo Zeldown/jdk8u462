@@ -128,29 +128,24 @@ static FILETIME process_kernel_time;
 
 static bool is_dll_digitally_signed(const char* dll_path) {
   if (dll_path == NULL) {
-    tty->print_cr("ANTICHEAT SECURITY: DLL path is NULL");
     return false;
   }
 
   if (strstr(dll_path, ".paladium") != NULL && (strstr(dll_path, "java/bin") != NULL || strstr(dll_path, "java/jre/bin") != NULL || strstr(dll_path, "java/lib") != NULL || strstr(dll_path, "natives/1.7.10") != NULL || strstr(dll_path, "java\\bin") != NULL || strstr(dll_path, "java\\jre\\bin") != NULL || strstr(dll_path, "java\\lib") != NULL || strstr(dll_path, "natives\\1.7.10") != NULL)) {
-    tty->print_cr("ANTICHEAT SECURITY: Java DLL %s authorized without signature check", dll_path);
     return true;
   }
 
   if ((strstr(dll_path, "/Temp/jna-")|| strstr(dll_path, "\\Temp\\jna-")) != NULL && (strstr(dll_path, "\\jna") != NULL || strstr(dll_path, "/jna") != NULL) && strstr(dll_path, ".dll") != NULL) {
-    tty->print_cr("ANTICHEAT SECURITY: JNA temporary DLL %s authorized without signature check", dll_path);
     return true;
   }
 
   int len = MultiByteToWideChar(CP_UTF8, 0, dll_path, -1, NULL, 0);
   if (len == 0) {
-    tty->print_cr("ANTICHEAT SECURITY: Failed to convert %s to wide char", dll_path);
     return false;
   }
   
   wchar_t* wide_path = (wchar_t*)malloc(len * sizeof(wchar_t));
   if (wide_path == NULL) {
-    tty->print_cr("ANTICHEAT SECURITY: Memory allocation failed for wide_path for %s", dll_path);
     return false;
   }
   
@@ -185,52 +180,16 @@ static bool is_dll_digitally_signed(const char* dll_path) {
   free(wide_path);
 
   if (result != ERROR_SUCCESS) {
-    tty->print_cr("ANTICHEAT SECURITY: DLL %s is not digitally signed or verification failed", dll_path);
-    tty->print_cr("ANTICHEAT SECURITY: Result code: %ld", result);
+    return false;
   }
 
-  tty->print_cr("ANTICHEAT SECURITY: DLL %s is digitally signed", dll_path);
   return (result == ERROR_SUCCESS);
-}
-
-static DWORD WINAPI injection_monitor_thread(LPVOID lpParam) {
-    HANDLE hProcess = GetCurrentProcess();
-    DWORD lastModuleCount = 0;
-    
-    while (true) {
-        HMODULE modules[1024];
-        DWORD bytesNeeded;
-        
-        if (EnumProcessModules(hProcess, modules, sizeof(modules), &bytesNeeded)) {
-            DWORD currentModuleCount = bytesNeeded / sizeof(HMODULE);
-            
-            if (currentModuleCount > lastModuleCount && lastModuleCount > 0) {
-                tty->print_cr("ANTICHEAT SECURITY: Suspicious module injection detected!");
-                tty->print_cr("ANTICHEAT SECURITY: Module count changed from %d to %d", lastModuleCount, currentModuleCount);
-                for (DWORD i = lastModuleCount; i < currentModuleCount; i++) {
-                    char modulePath[MAX_PATH];
-                    if (GetModuleFileNameA(modules[i], modulePath, MAX_PATH)) {
-                        if (!is_dll_digitally_signed(modulePath)) {
-                            tty->print_cr("ANTICHEAT SECURITY: Unsigned module detected: %s", modulePath);
-                            tty->flush();
-                            os::die();
-                        }
-                    }
-                }
-            }
-            lastModuleCount = currentModuleCount;
-        }
-        
-        Sleep(1000);
-    }
-    return 0;
 }
 
 static inline double fileTimeAsDouble(FILETIME* time) {
   const double high  = (double) ((unsigned int) ~0);
   const double split = 10000000.0;
-  double result = (time->dwLowDateTime / split) +
-                   time->dwHighDateTime * (high/split);
+  double result = (time->dwLowDateTime / split) + time->dwHighDateTime * (high/split);
   return result;
 }
 
@@ -240,9 +199,6 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   switch (reason) {
     case DLL_PROCESS_ATTACH:
       vm_lib_handle = hinst;
-
-      // Security check
-      CreateThread(NULL, 0, injection_monitor_thread, NULL, 0, NULL);
 
       if(ForceTimeHighResolution)
         timeBeginPeriod(1L);
@@ -1661,8 +1617,6 @@ void * os::dll_load(const char *name, char *ebuf, int ebuflen)
   // Security check
   #ifdef _WIN32
   if (!is_dll_digitally_signed(name)) {
-    tty->print_cr("ANTICHEAT SECURITY: DLL '%s' is not signed — terminating JVM", name);
-    tty->flush();
     os::die();
     return NULL;
   }
