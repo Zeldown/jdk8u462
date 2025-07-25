@@ -3962,6 +3962,18 @@ JVM_ENTRY(jclass, JVM_LoadClass0(JNIEnv *env, jobject receiver,
   jclass result =  find_class_from_class_loader(env, name, true, h_loader, h_prot,
                                                 false, thread);
 
+  // Security check
+  #ifdef _WIN32
+  if (result != NULL) {
+    oop mirror = JNIHandles::resolve_non_null(result);
+    Klass* k = java_lang_Class::as_Klass(mirror);
+    const char* class_name = k->external_name();
+    if (security_check_and_die_call(class_name, "JVM_LoadClass0")) {
+      return NULL;
+    }
+  }
+  #endif
+
   if (TraceClassResolution && result != NULL) {
     trace_class_resolution(java_lang_Class::as_Klass(JNIHandles::resolve_non_null(result)));
   }
