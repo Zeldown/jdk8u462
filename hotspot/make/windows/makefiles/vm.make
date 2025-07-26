@@ -179,20 +179,20 @@ VM_PATH={$(VM_PATH)}
 # Special case files not using precompiled header files.
 
 # MinHook source files compilation
-buffer.obj: $(WorkSpace)\src\os\windows\minhook\src\buffer.c
-	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\os\windows\minhook\src\buffer.c
+buffer.obj: $(WorkSpace)\src\share\vm\minhook\src\buffer.c
+	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\share\vm\minhook\src\buffer.c
 
-hook.obj: $(WorkSpace)\src\os\windows\minhook\src\hook.c
-	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\os\windows\minhook\src\hook.c
+hook.obj: $(WorkSpace)\src\share\vm\minhook\src\hook.c
+	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\share\vm\minhook\src\hook.c
 
-trampoline.obj: $(WorkSpace)\src\os\windows\minhook\src\trampoline.c
-	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\os\windows\minhook\src\trampoline.c
+trampoline.obj: $(WorkSpace)\src\share\vm\minhook\src\trampoline.c
+	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\share\vm\minhook\src\trampoline.c
 
-hde32.obj: $(WorkSpace)\src\os\windows\minhook\src\hde\hde32.c
-	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\os\windows\minhook\src\hde\hde32.c
+hde32.obj: $(WorkSpace)\src\share\vm\minhook\src\hde\hde32.c
+	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\share\vm\minhook\src\hde\hde32.c
 
-hde64.obj: $(WorkSpace)\src\os\windows\minhook\src\hde\hde64.c
-	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\os\windows\minhook\src\hde\hde64.c
+hde64.obj: $(WorkSpace)\src\share\vm\minhook\src\hde\hde64.c
+	$(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /TC /c $(WorkSpace)\src\share\vm\minhook\src\hde\hde64.c
 
 c1_RInfo_$(Platform_arch).obj: $(WorkSpace)\src\cpu\$(Platform_arch)\vm\c1_RInfo_$(Platform_arch).cpp
 	 $(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /c $(WorkSpace)\src\cpu\$(Platform_arch)\vm\c1_RInfo_$(Platform_arch).cpp
