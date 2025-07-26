@@ -75,6 +75,7 @@
 
 #include <windows.h>
 #include <psapi.h>
+#include <stdio.h>
 #include <winnt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -215,20 +216,51 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   return true;
 }
 
-bool looks_like_shellcode(BYTE* base, SIZE_T size) {
-    __try {
-        if (size >= 2 && base[0] == 0x55 && base[1] == 0x8B && base[2] == 0xEC) {
-            return true;
+bool is_module_known(BYTE* base) {
+    HMODULE hMods[1024];
+    DWORD cbNeeded;
+    if (EnumProcessModules(GetCurrentProcess(), hMods, sizeof(hMods), &cbNeeded)) {
+        for (unsigned i = 0; i < (cbNeeded / sizeof(HMODULE)); ++i) {
+            MODULEINFO mi;
+            if (GetModuleInformation(GetCurrentProcess(), hMods[i], &mi, sizeof(mi))) {
+                if ((BYTE*)mi.lpBaseOfDll == base) {
+                    return true;
+                }
+            }
         }
-
-        if (base[0] == 0xE9 || base[0] == 0xEB) {
-            return true;
-        }
-
-        return false;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
     }
+    return false;
+}
+
+bool has_pe_section_names(BYTE* base, SIZE_T size) {
+    const char* names[] = { ".text", ".data", ".rdata", ".pdata", ".rsrc", ".reloc" };
+    for (SIZE_T i = 0; i + 8 < size; ++i) {
+        for (const auto& name : names) {
+            if (memcmp(base + i, name, strlen(name)) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool has_import_strings(BYTE* base, SIZE_T size) {
+    const char* imports[] = { "LoadLibrary", "GetProcAddress", "kernel32.dll", "user32.dll" };
+    for (SIZE_T i = 0; i + 16 < size; ++i) {
+        for (const auto& imp : imports) {
+            if (memcmp(base + i, imp, strlen(imp)) == 0) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool looks_like_code(BYTE* base, SIZE_T size) {
+    if (size < 4) return false;
+    if (base[0] == 0x55 && base[1] == 0x8B && base[2] == 0xEC) return true;
+    if (base[0] == 0xE8 || base[0] == 0xE9 || base[0] == 0xEB) return true;
+    return false;
 }
 
 void scan_for_manual_map() {
@@ -241,20 +273,34 @@ void scan_for_manual_map() {
 
     while (addr < max_addr) {
         if (VirtualQuery(addr, &mbi, sizeof(mbi)) == 0) {
-          break;
+            break;
         }
-        
-        if (mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE && (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) {
+
+        if (mbi.State == MEM_COMMIT &&
+            mbi.Type == MEM_PRIVATE &&
+            (mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) {
+
             BYTE* region = (BYTE*)mbi.BaseAddress;
-            if (looks_like_shellcode(region, mbi.RegionSize)) {
-                tty->print_cr("Suspicious memory region detected at %p with size %zu", region, mbi.RegionSize);
-                tty->flush();
-                os::die();
+
+            if (!is_module_known(region)) {
+                BYTE* buffer = new BYTE[mbi.RegionSize];
+                SIZE_T bytesRead = 0;
+                if (ReadProcessMemory(GetCurrentProcess(), region, buffer, mbi.RegionSize, &bytesRead)) {
+                    if (has_pe_section_names(buffer, bytesRead) || has_import_strings(buffer, bytesRead) || looks_like_code(buffer, bytesRead)) {
+                        printf("[!] Suspicious manual mapped DLL detected at %p, size %zu bytes\n", region, mbi.RegionSize);
+                        delete[] buffer;
+                        os::die();
+                        return;
+                    }
+                }
+                delete[] buffer;
             }
         }
 
         addr += mbi.RegionSize;
     }
+
+    printf("Manual map scan completed.\n");
 }
 
 DWORD WINAPI AntiInjectionThread(LPVOID) {
