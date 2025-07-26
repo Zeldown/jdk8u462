@@ -73,11 +73,19 @@ done
 
 BASE_PATHS="${BASE_PATHS} ${GENERATED}/jvmtifiles ${GENERATED}/jfrfiles"
 
+if [ "${Platform_os_family}" = "windows" ]; then
+  MINHOOK_PATH="${COMMONSRC}/share/vm/minhook"
+  if [ -d "${MINHOOK_PATH}" ]; then
+    BASE_PATHS="${BASE_PATHS} ${MINHOOK_PATH}/src ${MINHOOK_PATH}/src/hde ${MINHOOK_PATH}/src/include"
+  fi
+fi
+
 if [ "$ENABLE_JFR" = "true" ]; then
 BASE_PATHS="${BASE_PATHS} `$FIND ${COMMONSRC}/share/vm/jfr -type d`"
 fi
 
 BASE_PATHS="${BASE_PATHS} ${COMMONSRC}/share/vm/prims/wbtestmethods"
+
 
 # shared is already in BASE_PATHS. Should add vm/memory but that one is also in BASE_PATHS.
 if [ -d "${ALTSRC}/share/vm/gc_implementation" ]; then
