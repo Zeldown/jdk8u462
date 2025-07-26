@@ -129,7 +129,7 @@ static bool check_suspicious_class_call(const char* class_name) {
     return false;
   }
 
-  if (strncmp(normalized_name, "org.lwjgl.opengl.", 17) == 0) {
+  if (strncmp(normalized_name, "org.lwjgl.", 10) == 0) {
     return false;
   }
 
@@ -141,17 +141,37 @@ static bool check_suspicious_class_call(const char* class_name) {
     return false;
   }
 
+  if (strncmp(normalized_name, "sun.font.", 9) == 0) {
+    return false;
+  }
+
+  if (strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) == 0) {
+    return false;
+  }
+
   return true;
 }
 
 static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
   if (check_suspicious_class_call(class_name)) {
     tty->print_cr("Security violation detected for class: %s in call: %s", class_name, call_location);
+    
     JavaThread* thread = JavaThread::current();
-    if (thread != NULL && thread->has_last_Java_frame()) {
-      tty->print_cr("Java stack trace:");
-      thread->print_stack();
+    if (thread != NULL) {
+      tty->print_cr("Current thread: %s (ID: %p)", thread->get_thread_name(), thread);
+      
+      if (thread->threadObj() != NULL) {
+        ResourceMark rm(thread);
+        tty->print_cr("Thread object: %s", thread->threadObj()->klass()->external_name());
+      }
+      
+      if (thread->has_last_Java_frame()) {
+        tty->print_cr("Java stack trace:");
+        thread->print_stack();
+      }
     }
+    
+    tty->flush();
     //os::die();
     //return true;
   }
