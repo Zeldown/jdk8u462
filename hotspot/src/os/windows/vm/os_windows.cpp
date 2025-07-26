@@ -357,6 +357,8 @@ HANDLE WINAPI HookedCreateRemoteThread(
             tty->print_cr("Suspicious thread creation detected at %p, base address: %p", lpStartAddress, baseAddress);
             os::die();
             return NULL;
+        } else {
+            tty->print_cr("Thread creation is allowed at %p, base address: %p", lpStartAddress, baseAddress);
         }
     }
     return OriginalCreateRemoteThread(hProcess, lpThreadAttributes, dwStackSize, lpStartAddress, lpParameter, dwCreationFlags, lpThreadId);
