@@ -350,6 +350,7 @@ HANDLE WINAPI HookedCreateRemoteThread(
     LPDWORD lpThreadId) 
 {
     MEMORY_BASIC_INFORMATION mbi = {};
+    tty->print_cr("HookedCreateRemoteThread called with lpStartAddress: %p", lpStartAddress);
     if (VirtualQueryEx(hProcess, (LPCVOID)lpStartAddress, &mbi, sizeof(mbi)) == sizeof(mbi)) {
         BYTE* baseAddress = (BYTE*)mbi.AllocationBase;
         if (!is_module_known(baseAddress)) {
