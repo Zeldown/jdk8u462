@@ -43,6 +43,7 @@
 #include "prims/jniFastGetField.hpp"
 #include "prims/jvm.h"
 #include "prims/jvm_misc.hpp"
+#include "minhook/include/MinHook.h"
 #include "runtime/arguments.hpp"
 #include "runtime/extendedPC.hpp"
 #include "runtime/globals.hpp"
@@ -93,8 +94,6 @@
 #include <imagehlp.h>             // For os::dll_address_to_function_name
 /* for enumerating dll libraries */
 #include <vdmdbg.h>
-
-#include "MinHook.h"
 
 // for timer info max values which include all bits
 #define ALL_64_BITS CONST64(0xFFFFFFFFFFFFFFFF)
