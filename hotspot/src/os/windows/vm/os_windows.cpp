@@ -233,7 +233,6 @@ bool is_module_known(BYTE* base) {
     return false;
 }
 
-/*
 bool has_pe_section_names(BYTE* base, SIZE_T size) {
     const char* names[] = { ".text", ".data", ".rdata", ".pdata", ".rsrc", ".reloc" };
     for (SIZE_T i = 0; i + 8 < size; ++i) {
@@ -265,6 +264,15 @@ bool looks_like_code(BYTE* base, SIZE_T size) {
     return false;
 }
 
+void dump_region_to_file(void* addr, SIZE_T size) {
+    HANDLE hFile = CreateFileA("suspicious_dump.bin", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile != INVALID_HANDLE_VALUE) {
+        DWORD written = 0;
+        WriteFile(hFile, addr, (DWORD)size, &written, NULL);
+        CloseHandle(hFile);
+    }
+}
+
 void scan_for_manual_map() {
     SYSTEM_INFO si;
     GetSystemInfo(&si);
@@ -289,10 +297,11 @@ void scan_for_manual_map() {
                 SIZE_T bytesRead = 0;
                 if (ReadProcessMemory(GetCurrentProcess(), region, buffer, mbi.RegionSize, &bytesRead)) {
                     if (has_pe_section_names(buffer, bytesRead) || has_import_strings(buffer, bytesRead) || looks_like_code(buffer, bytesRead)) {
+                        dump_region_to_file(buffer, mbi.RegionSize);
                         tty->print_cr("Manual map detected at %p, size: %zu bytes", region, mbi.RegionSize);
                         tty->flush();
                         delete[] buffer;
-                        os::die();
+                        // os::die();
                         return;
                     }
                 }
@@ -315,10 +324,9 @@ DWORD WINAPI AntiInjectionThread(LPVOID) {
     }
     return 0;
 }
-*/
 
 void start_anti_injection_thread() {
-    // CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
+    CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
 }
 
 typedef HANDLE(WINAPI* tCreateRemoteThread)(
