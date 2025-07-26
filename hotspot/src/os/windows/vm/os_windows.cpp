@@ -74,6 +74,7 @@
 #endif
 
 #include <windows.h>
+#include <psapi.h>
 #include <winnt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -212,6 +213,59 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
       break;
   }
   return true;
+}
+
+bool is_pe_header(void* base) {
+    __try {
+        IMAGE_DOS_HEADER* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+        if (dos->e_magic != IMAGE_DOS_SIGNATURE) {
+          return false;
+        }
+
+        IMAGE_NT_HEADERS* nt = reinterpret_cast<IMAGE_NT_HEADERS*>((BYTE*)base + dos->e_lfanew);
+        if (nt->Signature != IMAGE_NT_SIGNATURE) {
+          return false;
+        }
+
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void scan_for_manual_map() {
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+
+    BYTE* addr = (BYTE*)si.lpMinimumApplicationAddress;
+    BYTE* max_addr = (BYTE*)si.lpMaximumApplicationAddress;
+    MEMORY_BASIC_INFORMATION mbi;
+
+    while (addr < max_addr) {
+        if (VirtualQuery(addr, &mbi, sizeof(mbi)) == 0) {
+          break;
+        }
+
+        if (mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE && (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) {
+            if (is_pe_header(mbi.BaseAddress)) {
+                os::die();
+            }
+        }
+
+        addr += mbi.RegionSize;
+    }
+}
+
+DWORD WINAPI AntiInjectionThread(LPVOID) {
+    while (true) {
+        scan_for_manual_map();
+        Sleep(10000);
+    }
+    return 0;
+}
+
+void start_anti_injection_thread() {
+    CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
 }
 
 // Implementation of os
@@ -4087,6 +4141,7 @@ void os::init(void) {
   _initial_pid = _getpid();
 
   init_random(1234567);
+  start_anti_injection_thread();
 
   win32::initialize_system_info();
   win32::setmode_streams();
