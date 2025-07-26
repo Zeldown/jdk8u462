@@ -233,6 +233,7 @@ bool is_module_known(BYTE* base) {
     return false;
 }
 
+/*
 bool has_pe_section_names(BYTE* base, SIZE_T size) {
     const char* names[] = { ".text", ".data", ".rdata", ".pdata", ".rsrc", ".reloc" };
     for (SIZE_T i = 0; i + 8 < size; ++i) {
@@ -314,9 +315,10 @@ DWORD WINAPI AntiInjectionThread(LPVOID) {
     }
     return 0;
 }
+*/
 
 void start_anti_injection_thread() {
-    CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
+    // CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
 }
 
 typedef HANDLE(WINAPI* tCreateRemoteThread)(
