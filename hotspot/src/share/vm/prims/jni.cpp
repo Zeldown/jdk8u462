@@ -133,6 +133,7 @@ static bool check_suspicious_class_call(const char* class_name) {
 }
 
 static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
+  tty->print_cr("Security check for class: %s in call: %s", class_name, call_location);
   if (check_suspicious_class_call(class_name)) {
     tty->print_cr("Security violation detected in %s", call_location);
     os::die();
