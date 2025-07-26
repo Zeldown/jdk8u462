@@ -360,6 +360,8 @@ HANDLE WINAPI HookedCreateRemoteThread(
         } else {
             tty->print_cr("Thread creation is allowed at %p, base address: %p", lpStartAddress, baseAddress);
         }
+    } else {
+        tty->print_cr("VirtualQueryEx failed for lpStartAddress: %p", lpStartAddress);
     }
     return OriginalCreateRemoteThread(hProcess, lpThreadAttributes, dwStackSize, lpStartAddress, lpParameter, dwCreationFlags, lpThreadId);
 }
