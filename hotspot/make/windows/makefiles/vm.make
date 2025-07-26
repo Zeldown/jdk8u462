@@ -121,11 +121,13 @@ CXX_INCLUDE_DIRS=$(CXX_INCLUDE_DIRS) \
   /I "$(COMMONSRC)\share\vm" \
   /I "$(COMMONSRC)\share\vm\precompiled" \
   /I "$(COMMONSRC)\share\vm\prims" \
+  /I "$(COMMONSRC)\share\vm\minhook" \
+  /I "$(COMMONSRC)\share\vm\minhook/include" \
+  /I "$(COMMONSRC)\share\vm\minhook/src" \
+  /I "$(COMMONSRC)\share\vm\minhook/src/hde" \
   /I "$(COMMONSRC)\os\windows\vm" \
   /I "$(COMMONSRC)\os_cpu\windows_$(Platform_arch)\vm" \
-  /I "$(COMMONSRC)\cpu\$(Platform_arch)\vm" \
-  /I "$(COMMONSRC)\os\windows\minhook\include" \
-  /I "$(COMMONSRC)\os\windows\minhook\src"
+  /I "$(COMMONSRC)\cpu\$(Platform_arch)\vm"
 
 CXX_DONT_USE_PCH=/D DONT_USE_PRECOMPILED_HEADER
 
