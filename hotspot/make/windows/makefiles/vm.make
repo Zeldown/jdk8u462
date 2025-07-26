@@ -162,6 +162,9 @@ VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/oops
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/prims
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/prims/wbtestmethods
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/runtime
+VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/minhook/src
+VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/minhook/src/hde
+VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/minhook/include
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/services
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/trace
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/utilities
@@ -170,8 +173,6 @@ VM_PATH=$(VM_PATH);$(WorkSpace)/src/os/windows/vm
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/os_cpu/windows_$(Platform_arch)/vm
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/cpu/$(Platform_arch)/vm
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/opto
-VM_PATH=$(VM_PATH);$(WorkSpace)/src/os/windows/minhook/src
-VM_PATH=$(VM_PATH);$(WorkSpace)/src/os/windows/minhook/src/hde
 
 VM_PATH={$(VM_PATH)}
 

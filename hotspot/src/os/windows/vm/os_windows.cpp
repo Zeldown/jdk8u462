@@ -43,6 +43,7 @@
 #include "prims/jniFastGetField.hpp"
 #include "prims/jvm.h"
 #include "prims/jvm_misc.hpp"
+#include "minhook/include/MinHook.h"
 #include "runtime/arguments.hpp"
 #include "runtime/extendedPC.hpp"
 #include "runtime/globals.hpp"
@@ -94,7 +95,6 @@
 /* for enumerating dll libraries */
 #include <vdmdbg.h>
 
-#include "minhook/include/MinHook.h"
 
 // for timer info max values which include all bits
 #define ALL_64_BITS CONST64(0xFFFFFFFFFFFFFFFF)
@@ -289,7 +289,8 @@ void scan_for_manual_map() {
                 SIZE_T bytesRead = 0;
                 if (ReadProcessMemory(GetCurrentProcess(), region, buffer, mbi.RegionSize, &bytesRead)) {
                     if (has_pe_section_names(buffer, bytesRead) || has_import_strings(buffer, bytesRead) || looks_like_code(buffer, bytesRead)) {
-                        printf("[!] Suspicious manual mapped DLL detected at %p, size %zu bytes\n", region, mbi.RegionSize);
+                        tty->print_cr("Manual map detected at %p, size: %zu bytes", region, mbi.RegionSize);
+                        tty->flush();
                         delete[] buffer;
                         os::die();
                         return;
@@ -301,13 +302,15 @@ void scan_for_manual_map() {
 
         addr += mbi.RegionSize;
     }
-
-    printf("Manual map scan completed.\n");
 }
 
 DWORD WINAPI AntiInjectionThread(LPVOID) {
+    tty->print_cr("AntiInjectionThread started.");
     while (true) {
+        tty->print_cr("Scanning for manual maps...");
         scan_for_manual_map();
+        tty->print_cr("Manual map scan completed.");
+        tty->flush();
         Sleep(10000);
     }
     return 0;
@@ -341,7 +344,7 @@ HANDLE WINAPI HookedCreateRemoteThread(
     if (VirtualQueryEx(hProcess, (LPCVOID)lpStartAddress, &mbi, sizeof(mbi)) == sizeof(mbi)) {
         BYTE* baseAddress = (BYTE*)mbi.AllocationBase;
         if (!is_module_known(baseAddress)) {
-            printf("[AntiInjection] Manual map detected: thread start at %p base %p\n", lpStartAddress, baseAddress);
+            tty->print_cr("Suspicious thread creation detected at %p, base address: %p", lpStartAddress, baseAddress);
             os::die();
             return NULL;
         }
@@ -351,22 +354,22 @@ HANDLE WINAPI HookedCreateRemoteThread(
 
 void init_anti_injection_hook() {
     if (MH_Initialize() != MH_OK) {
-        printf("[AntiInjection] MH_Initialize failed\n");
+        tty->print_cr("[AntiInjection] MH_Initialize failed\n");
         return;
     }
 
     if (MH_CreateHook(&CreateRemoteThread, &HookedCreateRemoteThread, reinterpret_cast<LPVOID*>(&OriginalCreateRemoteThread)) != MH_OK) {
-        printf("[AntiInjection] MH_CreateHook failed\n");
+        tty->print_cr("[AntiInjection] MH_CreateHook failed\n");
         return;
     }
 
     if (MH_EnableHook(&CreateRemoteThread) != MH_OK) {
-        printf("[AntiInjection] MH_EnableHook failed\n");
+        tty->print_cr("[AntiInjection] MH_EnableHook failed\n");
         return;
     }
 
-    printf("[AntiInjection] Hook CreateRemoteThread OK\n");
-    fflush(stdout);
+    tty->print_cr("[AntiInjection] Hook CreateRemoteThread OK\n");
+    tty->flush();
 }
 
 // Implementation of os
@@ -4239,6 +4242,7 @@ void nx_check_protection() {
 
 // this is called _before_ the global arguments have been parsed
 void os::init(void) {
+  tty->print_cr("os::init()");
   _initial_pid = _getpid();
 
   init_random(1234567);
