@@ -74,6 +74,7 @@
 #endif
 
 #include <windows.h>
+#include <winternl.h>
 #include <winnt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -166,6 +167,14 @@ void hook_ldrloaddll() {
     *((BYTE*)pLdrLoadDll + 11) = 0xE0;
 
     VirtualProtect(pLdrLoadDll, 16, oldProtect, &oldProtect);
+}
+
+void enable_mitigation_policy() {
+    PROCESS_MITIGATION_DYNAMIC_CODE_POLICY code_policy = { 0 };
+    code_policy.ProhibitDynamicCode = 1;
+    code_policy.AllowThreadOptOut = 0;
+    code_policy.AllowRemoteDowngrade = 0;
+    SetProcessMitigationPolicy(ProcessDynamicCodePolicy, &code_policy, sizeof(code_policy));
 }
 
 #include <wintrust.h>
@@ -4136,7 +4145,10 @@ void os::init(void) {
   _initial_pid = _getpid();
 
   init_random(1234567);
+
+  // Security check
   hook_ldrloaddll();
+  enable_mitigation_policy();
 
   win32::initialize_system_info();
   win32::setmode_streams();
