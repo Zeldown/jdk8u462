@@ -119,6 +119,55 @@ static FILETIME process_kernel_time;
   #endif
 #endif
 
+typedef NTSTATUS (NTAPI* LdrLoadDll_t)(
+    PWSTR PathToFile,
+    ULONG Flags,
+    PUNICODE_STRING ModuleFileName,
+    PHANDLE ModuleHandle
+);
+
+LdrLoadDll_t OriginalLdrLoadDll = nullptr;
+
+NTSTATUS NTAPI HookedLdrLoadDll(
+    PWSTR PathToFile,
+    ULONG Flags,
+    PUNICODE_STRING ModuleFileName,
+    PHANDLE ModuleHandle
+) {
+    if (ModuleFileName && !is_dll_digitally_signed(ModuleFileName->Buffer)) {
+        OutputDebugStringW(L"[LdrLoadDll] Injection blocked: ");
+        OutputDebugStringW(ModuleFileName->Buffer);
+        return STATUS_ACCESS_DENIED;
+    }
+
+    return OriginalLdrLoadDll(PathToFile, Flags, ModuleFileName, ModuleHandle);
+}
+
+void hook_ldrloaddll() {
+    HMODULE hNtDll = GetModuleHandleW(L"ntdll.dll");
+    if (!hNtDll) {
+      return;
+    }
+
+    void* pLdrLoadDll = GetProcAddress(hNtDll, "LdrLoadDll");
+    if (!pLdrLoadDll) {
+      return;
+    }
+
+    DWORD oldProtect;
+    VirtualProtect(pLdrLoadDll, 16, PAGE_EXECUTE_READWRITE, &oldProtect);
+
+    OriginalLdrLoadDll = (LdrLoadDll_t)pLdrLoadDll;
+
+    BYTE jmp[] = { 0x48, 0xB8 };
+    memcpy(pLdrLoadDll, jmp, sizeof(jmp));
+    *(void**)((BYTE*)pLdrLoadDll + 2) = (void*)HookedLdrLoadDll;
+    *((BYTE*)pLdrLoadDll + 10) = 0xFF;
+    *((BYTE*)pLdrLoadDll + 11) = 0xE0;
+
+    VirtualProtect(pLdrLoadDll, 16, oldProtect, &oldProtect);
+}
+
 #include <wintrust.h>
 #include <softpub.h>
 #include <wincrypt.h>
@@ -4087,6 +4136,7 @@ void os::init(void) {
   _initial_pid = _getpid();
 
   init_random(1234567);
+  hook_ldrloaddll();
 
   win32::initialize_system_info();
   win32::setmode_streams();
