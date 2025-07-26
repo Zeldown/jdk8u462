@@ -121,11 +121,11 @@ static bool check_suspicious_class_call(const char* class_name) {
     return true;
   }
 
-  if (strncmp(normalized_name, "java.util.zip.", 14) == 0) {
+  if (strncmp(normalized_name, "java.io.", 8) == 0) {
     return false;
   }
 
-  if (strncmp(normalized_name, "java.io.", 8) == 0) {
+  if (strncmp(normalized_name, "java.util.", 10) == 0) {
     return false;
   }
 
@@ -4217,16 +4217,6 @@ JNI_ENTRY(jint, jni_RegisterNatives(JNIEnv *env, jclass clazz,
   DT_RETURN_MARK(RegisterNatives, jint, (const jint&)ret);
 
   KlassHandle h_k(thread, java_lang_Class::as_Klass(JNIHandles::resolve_non_null(clazz)));
-
-  // Security check
-  #ifdef _WIN32
-  oop mirror = JNIHandles::resolve_non_null(clazz);
-  Klass* k = java_lang_Class::as_Klass(mirror);
-  const char* class_name = k->external_name();
-  if (security_check_and_die_call(class_name, "RegisterNatives")) {
-    return NULL;
-  }
-  #endif
 
   for (int index = 0; index < nMethods; index++) {
     const char* meth_name = methods[index].name;
