@@ -103,6 +103,15 @@ extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 #include <windows.h>
 #include <dbghelp.h>
 
+#ifndef CaptureStackBackTrace
+extern "C" USHORT WINAPI CaptureStackBackTrace(
+    ULONG FramesToSkip,
+    ULONG FramesToCapture,
+    PVOID* BackTrace,
+    PULONG BackTraceHash
+);
+#endif
+
 static bool get_calling_module(char* module_name, size_t buffer_size) {
     HANDLE process = GetCurrentProcess();
     HANDLE thread = GetCurrentThread();
@@ -119,7 +128,7 @@ static bool get_calling_module(char* module_name, size_t buffer_size) {
     for (WORD i = 2; i < frames; i++) {
         HMODULE hModule;
         if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCTSTR)stack[i], &hModule)) {
-            if (GetModuleFileName(hModule, module_name, buffer_size)) {
+            if (GetModuleFileName(hModule, module_name, (DWORD)buffer_size)) {
                 char* filename = strrchr(module_name, '\\');
                 if (filename) {
                     strcpy(module_name, filename + 1);
