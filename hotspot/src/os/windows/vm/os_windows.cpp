@@ -94,6 +94,8 @@
 /* for enumerating dll libraries */
 #include <vdmdbg.h>
 
+#include "minhook/include/MinHook.h"
+
 // for timer info max values which include all bits
 #define ALL_64_BITS CONST64(0xFFFFFFFFFFFFFFFF)
 
@@ -313,6 +315,58 @@ DWORD WINAPI AntiInjectionThread(LPVOID) {
 
 void start_anti_injection_thread() {
     CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
+}
+
+typedef HANDLE(WINAPI* tCreateRemoteThread)(
+    HANDLE hProcess,
+    LPSECURITY_ATTRIBUTES lpThreadAttributes,
+    SIZE_T dwStackSize,
+    LPTHREAD_START_ROUTINE lpStartAddress,
+    LPVOID lpParameter,
+    DWORD dwCreationFlags,
+    LPDWORD lpThreadId);
+
+tCreateRemoteThread OriginalCreateRemoteThread = nullptr;
+
+HANDLE WINAPI HookedCreateRemoteThread(
+    HANDLE hProcess,
+    LPSECURITY_ATTRIBUTES lpThreadAttributes,
+    SIZE_T dwStackSize,
+    LPTHREAD_START_ROUTINE lpStartAddress,
+    LPVOID lpParameter,
+    DWORD dwCreationFlags,
+    LPDWORD lpThreadId) 
+{
+    MEMORY_BASIC_INFORMATION mbi = {};
+    if (VirtualQueryEx(hProcess, (LPCVOID)lpStartAddress, &mbi, sizeof(mbi)) == sizeof(mbi)) {
+        BYTE* baseAddress = (BYTE*)mbi.AllocationBase;
+        if (!is_module_known(baseAddress)) {
+            printf("[AntiInjection] Manual map detected: thread start at %p base %p\n", lpStartAddress, baseAddress);
+            os::die();
+            return NULL;
+        }
+    }
+    return OriginalCreateRemoteThread(hProcess, lpThreadAttributes, dwStackSize, lpStartAddress, lpParameter, dwCreationFlags, lpThreadId);
+}
+
+void init_anti_injection_hook() {
+    if (MH_Initialize() != MH_OK) {
+        printf("[AntiInjection] MH_Initialize failed\n");
+        return;
+    }
+
+    if (MH_CreateHook(&CreateRemoteThread, &HookedCreateRemoteThread, reinterpret_cast<LPVOID*>(&OriginalCreateRemoteThread)) != MH_OK) {
+        printf("[AntiInjection] MH_CreateHook failed\n");
+        return;
+    }
+
+    if (MH_EnableHook(&CreateRemoteThread) != MH_OK) {
+        printf("[AntiInjection] MH_EnableHook failed\n");
+        return;
+    }
+
+    printf("[AntiInjection] Hook CreateRemoteThread OK\n");
+    fflush(stdout);
 }
 
 // Implementation of os
@@ -4189,6 +4243,7 @@ void os::init(void) {
 
   init_random(1234567);
   start_anti_injection_thread();
+  init_anti_injection_hook();
 
   win32::initialize_system_info();
   win32::setmode_streams();
