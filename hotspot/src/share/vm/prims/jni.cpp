@@ -100,46 +100,6 @@ static jint CurrentVersion = JNI_VERSION_1_8;
 #ifdef _WIN32
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 
-#include <windows.h>
-#include <dbghelp.h>
-
-#ifndef CaptureStackBackTrace
-extern "C" USHORT WINAPI CaptureStackBackTrace(
-    ULONG FramesToSkip,
-    ULONG FramesToCapture,
-    PVOID* BackTrace,
-    PULONG BackTraceHash
-);
-#endif
-
-static bool get_calling_module(char* module_name, size_t buffer_size) {
-    HANDLE process = GetCurrentProcess();
-    HANDLE thread = GetCurrentThread();
-    
-    static bool symbols_initialized = false;
-    if (!symbols_initialized) {
-        SymInitialize(process, NULL, TRUE);
-        symbols_initialized = true;
-    }
-    
-    void* stack[64];
-    WORD frames = CaptureStackBackTrace(0, 64, stack, NULL);
-    
-    for (WORD i = 2; i < frames; i++) {
-        HMODULE hModule;
-        if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCTSTR)stack[i], &hModule)) {
-            if (GetModuleFileName(hModule, module_name, (DWORD)buffer_size)) {
-                char* filename = strrchr(module_name, '\\');
-                if (filename) {
-                    strcpy(module_name, filename + 1);
-                }
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 static bool check_suspicious_class_call(const char* class_name) {
   if (class_name == NULL) {
     return false;
@@ -161,31 +121,27 @@ static bool check_suspicious_class_call(const char* class_name) {
     return true;
   }
 
-  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
-    tty->print_cr("Suspicious class detected: %s", normalized_name);
-    tty->flush();
-    return true;
+  if (strncmp(normalized_name, "java.util.zip.", 14) == 0) {
+    return false;
   }
 
-  return false;
+  if (strncmp(normalized_name, "java.io.", 8) == 0) {
+    return false;
+  }
+
+  return true;
 }
 
 static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
-  char calling_module[MAX_PATH] = {0};
-  bool has_caller_info = get_calling_module(calling_module, sizeof(calling_module));
-
-  tty->print_cr("Security check for class: %s in call: %s from module: %s", class_name, call_location, has_caller_info ? calling_module : "unknown");
-
-  JavaThread* thread = JavaThread::current();
-  if (thread != NULL && thread->has_last_Java_frame()) {
-    tty->print_cr("Java stack trace:");
-    thread->print_stack();
-  }
-
   if (check_suspicious_class_call(class_name)) {
-    tty->print_cr("Security violation detected in %s", call_location);
-    os::die();
-    return true;
+    tty->print_cr("Security violation detected for class: %s in call: %s", class_name, call_location);
+    JavaThread* thread = JavaThread::current();
+    if (thread != NULL && thread->has_last_Java_frame()) {
+      tty->print_cr("Java stack trace:");
+      thread->print_stack();
+    }
+    //os::die();
+    //return true;
   }
   return false;
 }
