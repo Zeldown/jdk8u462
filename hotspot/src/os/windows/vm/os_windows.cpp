@@ -215,19 +215,17 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   return true;
 }
 
-bool is_pe_header(void* base) {
+bool looks_like_shellcode(BYTE* base, SIZE_T size) {
     __try {
-        IMAGE_DOS_HEADER* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
-        if (dos->e_magic != IMAGE_DOS_SIGNATURE) {
-          return false;
+        if (size >= 2 && base[0] == 0x55 && base[1] == 0x8B && base[2] == 0xEC) {
+            return true;
         }
 
-        IMAGE_NT_HEADERS* nt = reinterpret_cast<IMAGE_NT_HEADERS*>((BYTE*)base + dos->e_lfanew);
-        if (nt->Signature != IMAGE_NT_SIGNATURE) {
-          return false;
+        if (base[0] == 0xE9 || base[0] == 0xEB) {
+            return true;
         }
 
-        return true;
+        return false;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -245,9 +243,12 @@ void scan_for_manual_map() {
         if (VirtualQuery(addr, &mbi, sizeof(mbi)) == 0) {
           break;
         }
-
+        
         if (mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE && (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) {
-            if (is_pe_header(mbi.BaseAddress)) {
+            BYTE* region = (BYTE*)mbi.BaseAddress;
+            if (looks_like_shellcode(region, mbi.RegionSize)) {
+                tty->print_cr("Suspicious memory region detected at %p with size %zu", region, mbi.RegionSize);
+                tty->flush();
                 os::die();
             }
         }
