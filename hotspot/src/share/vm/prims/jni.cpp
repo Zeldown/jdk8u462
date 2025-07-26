@@ -123,17 +123,18 @@ static bool check_suspicious_class_call(const char* class_name) {
     return true;
   }
 
-  if (strncmp(normalized_name, "ClassLoader", 11) == 0) {
-    tty->print_cr("Suspicious class loader detected: %s", normalized_name);
-    tty->flush();
-    return true;
-  }
-
   return false;
 }
 
 static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
   tty->print_cr("Security check for class: %s in call: %s", class_name, call_location);
+  
+  JavaThread* thread = JavaThread::current();
+  if (thread != NULL && thread->has_last_Java_frame()) {
+    tty->print_cr("Java stack trace:");
+    thread->print_stack();
+  }
+
   if (check_suspicious_class_call(class_name)) {
     tty->print_cr("Security violation detected in %s", call_location);
     os::die();
@@ -3594,13 +3595,6 @@ JNI_ENTRY(jobjectArray, jni_NewObjectArray(JNIEnv *env, jsize length, jclass ele
  HOTSPOT_JNI_NEWOBJECTARRAY_ENTRY(
                                   env, length, elementClass, initialElement);
 #endif /* USDT2 */
-
-  #ifdef _WIN32
-  tty->print_cr("Security violation detected in NewObjectArray");
-  tty->flush();
-  os::die();
-  return NULL;
-  #endif
 
   jobjectArray ret = NULL;
   DT_RETURN_MARK(NewObjectArray, jobjectArray, (const jobjectArray&)ret);
