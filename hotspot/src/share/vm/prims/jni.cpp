@@ -121,59 +121,17 @@ static bool check_suspicious_class_call(const char* class_name) {
     return true;
   }
 
-  if (strncmp(normalized_name, "java.io.", 8) == 0) {
-    return false;
+  if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
+    return true;
   }
 
-  if (strncmp(normalized_name, "java.util.", 10) == 0) {
-    return false;
-  }
-
-  if (strncmp(normalized_name, "org.lwjgl.", 10) == 0) {
-    return false;
-  }
-
-  if (strncmp(normalized_name, "java.net.", 9) == 0) {
-    return false;
-  }
-
-  if (strncmp(normalized_name, "com.sun.", 8) == 0) {
-    return false;
-  }
-
-  if (strncmp(normalized_name, "sun.font.", 9) == 0) {
-    return false;
-  }
-
-  if (strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) == 0) {
-    return false;
-  }
-
-  return true;
+  return false;
 }
 
 static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
   if (check_suspicious_class_call(class_name)) {
-    tty->print_cr("Security violation detected for class: %s in call: %s", class_name, call_location);
-    
-    JavaThread* thread = JavaThread::current();
-    if (thread != NULL) {
-      tty->print_cr("Current thread: %s (ID: %p)", thread->get_thread_name(), thread);
-      
-      if (thread->threadObj() != NULL) {
-        ResourceMark rm(thread);
-        tty->print_cr("Thread object: %s", thread->threadObj()->klass()->external_name());
-      }
-      
-      if (thread->has_last_Java_frame()) {
-        tty->print_cr("Java stack trace:");
-        thread->print_stack();
-      }
-    }
-    
-    tty->flush();
-    //os::die();
-    //return true;
+    os::die();
+    return true;
   }
   return false;
 }
@@ -4249,6 +4207,16 @@ JNI_ENTRY(jint, jni_RegisterNatives(JNIEnv *env, jclass clazz,
   DT_RETURN_MARK(RegisterNatives, jint, (const jint&)ret);
 
   KlassHandle h_k(thread, java_lang_Class::as_Klass(JNIHandles::resolve_non_null(clazz)));
+
+  // Security check
+  #ifdef _WIN32
+  oop mirror = JNIHandles::resolve_non_null(clazz);
+  Klass* k = java_lang_Class::as_Klass(mirror);
+  const char* class_name = k->external_name();
+  if (security_check_and_die_call(class_name, "RegisterNatives")) {
+    return NULL;
+  }
+  #endif
 
   for (int index = 0; index < nMethods; index++) {
     const char* meth_name = methods[index].name;
