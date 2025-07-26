@@ -129,6 +129,18 @@ static bool check_suspicious_class_call(const char* class_name) {
     return false;
   }
 
+  if (strncmp(normalized_name, "org.lwjgl.opengl.", 17) == 0) {
+    return false;
+  }
+
+  if (strncmp(normalized_name, "java.net.", 9) == 0) {
+    return false;
+  }
+
+  if (strncmp(normalized_name, "com.sun.", 8) == 0) {
+    return false;
+  }
+
   return true;
 }
 
