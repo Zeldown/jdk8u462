@@ -3968,7 +3968,7 @@ JVM_ENTRY(jclass, JVM_LoadClass0(JNIEnv *env, jobject receiver,
     oop mirror = JNIHandles::resolve_non_null(result);
     Klass* k = java_lang_Class::as_Klass(mirror);
     const char* class_name = k->external_name();
-    if (security_check_and_die_call(class_name, "JVM_LoadClass0")) {
+    if (security_check_and_die_load(class_name, "JVM_LoadClass0")) {
       return NULL;
     }
   }

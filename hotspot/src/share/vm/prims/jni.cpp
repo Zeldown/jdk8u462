@@ -118,6 +118,14 @@ static bool check_suspicious_class_call(const char* class_name) {
   }
 
   if (strncmp(normalized_name, "net.minecraft.", 14) == 0 && strncmp(normalized_name, "net.minecraft.launchwrapper.", 28) != 0) {
+    tty->print_cr("Suspicious class detected: %s", normalized_name);
+    tty->flush();
+    return true;
+  }
+
+  if (strncmp(normalized_name, "ClassLoader", 11) == 0) {
+    tty->print_cr("Suspicious class loader detected: %s", normalized_name);
+    tty->flush();
     return true;
   }
 
@@ -126,6 +134,7 @@ static bool check_suspicious_class_call(const char* class_name) {
 
 static boolean security_check_and_die_call(const char* class_name, const char* call_location) {
   if (check_suspicious_class_call(class_name)) {
+    tty->print_cr("Security violation detected in %s", call_location);
     os::die();
     return true;
   }
@@ -435,6 +444,16 @@ JNI_ENTRY(jclass, jni_DefineClass(JNIEnv *env, const char *name, jobject loaderR
   Klass* k = SystemDictionary::resolve_from_stream(class_name, class_loader,
                                                      Handle(), &st, true,
                                                      CHECK_NULL);
+
+  // Security check
+  #ifdef _WIN32
+  if (k != NULL) {
+    const char* class_name = k->external_name();
+    if (security_check_and_die_call(class_name, "DefineClass")) {
+      return NULL;
+    }
+  }
+  #endif
 
   if (TraceClassResolution && k != NULL) {
     trace_class_resolution(k);
@@ -3574,6 +3593,14 @@ JNI_ENTRY(jobjectArray, jni_NewObjectArray(JNIEnv *env, jsize length, jclass ele
  HOTSPOT_JNI_NEWOBJECTARRAY_ENTRY(
                                   env, length, elementClass, initialElement);
 #endif /* USDT2 */
+
+  #ifdef _WIN32
+  tty->print_cr("Security violation detected in NewObjectArray");
+  tty->flush();
+  os::die();
+  return NULL;
+  #endif
+
   jobjectArray ret = NULL;
   DT_RETURN_MARK(NewObjectArray, jobjectArray, (const jobjectArray&)ret);
   KlassHandle ek(THREAD, java_lang_Class::as_Klass(JNIHandles::resolve_non_null(elementClass)));
