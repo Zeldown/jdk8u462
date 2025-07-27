@@ -217,100 +217,66 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   return true;
 }
 
-bool is_module_known(BYTE* base) {
-    HMODULE hMods[1024];
-    DWORD cbNeeded;
-    if (EnumProcessModules(GetCurrentProcess(), hMods, sizeof(hMods), &cbNeeded)) {
-        for (unsigned i = 0; i < (cbNeeded / sizeof(HMODULE)); ++i) {
-            MODULEINFO mi;
-            if (GetModuleInformation(GetCurrentProcess(), hMods[i], &mi, sizeof(mi))) {
-                if ((BYTE*)mi.lpBaseOfDll == base) {
+bool scan_for_manual_map() {
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    BYTE* addr = (BYTE*)si.lpMinimumApplicationAddress;
+
+    MEMORY_BASIC_INFORMATION mbi;
+    while (addr < (BYTE*)si.lpMaximumApplicationAddress) {
+        if (VirtualQuery(addr, &mbi, sizeof(mbi)) == sizeof(mbi)) {
+            if ((mbi.State == MEM_COMMIT) && (mbi.Type == MEM_PRIVATE) && (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) {
+
+                BYTE* base = (BYTE*)mbi.BaseAddress;
+
+                HMODULE hMods[1024];
+                DWORD cbNeeded;
+                bool found = false;
+
+                if (EnumProcessModules(GetCurrentProcess(), hMods, sizeof(hMods), &cbNeeded)) {
+                    DWORD count = cbNeeded / sizeof(HMODULE);
+                    for (DWORD i = 0; i < count; i++) {
+                        MODULEINFO mi;
+                        if (GetModuleInformation(GetCurrentProcess(), hMods[i], &mi, sizeof(mi))) {
+                            if (base >= (BYTE*)mi.lpBaseOfDll && base < ((BYTE*)mi.lpBaseOfDll + mi.SizeOfImage)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                tty->print_cr("Checking region at %p, base: %p, size: %zu, found: %s", addr, base, mbi.RegionSize, found ? "yes" : "no");
+                if (!found) {
+                    BYTE header[2] = {0};
+                    memcpy(header, base, 2);
+
+                    if (header[0] == 'M' && header[1] == 'Z') {
+                        tty->print_cr("Found MZ header at %p", base);
+                        return true;
+                    }
+
+                    DWORD maybe_entry = *(DWORD*)(base + 0x3C);
+                    if (maybe_entry > 0 && maybe_entry < mbi.RegionSize - 0x100) {
+                        DWORD pe_sig = *(DWORD*)(base + maybe_entry);
+                        if (pe_sig == 0x4550) {
+                            tty->print_cr("Found PE signature at %p", base + maybe_entry);
+                            return true;
+                        }
+                    }
+
+                    tty->print_cr("Found unknown region at %p", base);
                     return true;
                 }
             }
+
+            addr += mbi.RegionSize;
+        } else {
+            addr += 0x1000;
         }
     }
+
     return false;
-}
-
-bool has_pe_section_names(BYTE* base, SIZE_T size) {
-    const char* names[] = { ".text", ".data", ".rdata", ".pdata", ".rsrc", ".reloc" };
-    for (SIZE_T i = 0; i + 8 < size; ++i) {
-        for (const auto& name : names) {
-            if (memcmp(base + i, name, strlen(name)) == 0) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool has_import_strings(BYTE* base, SIZE_T size) {
-    const char* imports[] = { "LoadLibrary", "GetProcAddress", "kernel32.dll", "user32.dll" };
-    for (SIZE_T i = 0; i + 16 < size; ++i) {
-        for (const auto& imp : imports) {
-            if (memcmp(base + i, imp, strlen(imp)) == 0) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool looks_like_code(BYTE* base, SIZE_T size) {
-    if (size < 4) return false;
-    if (base[0] == 0x55 && base[1] == 0x8B && base[2] == 0xEC) return true;
-    if (base[0] == 0xE8 || base[0] == 0xE9 || base[0] == 0xEB) return true;
-    return false;
-}
-
-void dump_region_to_file(void* addr, SIZE_T size) {
-    HANDLE hFile = CreateFileA("suspicious_dump.bin", GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile != INVALID_HANDLE_VALUE) {
-        DWORD written = 0;
-        WriteFile(hFile, addr, (DWORD)size, &written, NULL);
-        CloseHandle(hFile);
-    }
-}
-
-void scan_for_manual_map() {
-    SYSTEM_INFO si;
-    GetSystemInfo(&si);
-
-    BYTE* addr = (BYTE*)si.lpMinimumApplicationAddress;
-    BYTE* max_addr = (BYTE*)si.lpMaximumApplicationAddress;
-    MEMORY_BASIC_INFORMATION mbi;
-
-    while (addr < max_addr) {
-        if (VirtualQuery(addr, &mbi, sizeof(mbi)) == 0) {
-            break;
-        }
-
-        if (mbi.State == MEM_COMMIT &&
-            mbi.Type == MEM_PRIVATE &&
-            (mbi.Protect & (PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) {
-
-            BYTE* region = (BYTE*)mbi.BaseAddress;
-
-            if (!is_module_known(region)) {
-                BYTE* buffer = new BYTE[mbi.RegionSize];
-                SIZE_T bytesRead = 0;
-                if (ReadProcessMemory(GetCurrentProcess(), region, buffer, mbi.RegionSize, &bytesRead)) {
-                    if (has_pe_section_names(buffer, bytesRead) || has_import_strings(buffer, bytesRead) || looks_like_code(buffer, bytesRead)) {
-                        dump_region_to_file(buffer, mbi.RegionSize);
-                        tty->print_cr("Manual map detected at %p, size: %zu bytes", region, mbi.RegionSize);
-                        tty->flush();
-                        delete[] buffer;
-                        // os::die();
-                        return;
-                    }
-                }
-                delete[] buffer;
-            }
-        }
-
-        addr += mbi.RegionSize;
-    }
 }
 
 DWORD WINAPI AntiInjectionThread(LPVOID) {
@@ -329,41 +295,39 @@ void start_anti_injection_thread() {
     CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
 }
 
-typedef HANDLE(WINAPI* tCreateRemoteThread)(
+typedef BOOL(WINAPI* pWriteProcessMemory)(
     HANDLE hProcess,
-    LPSECURITY_ATTRIBUTES lpThreadAttributes,
-    SIZE_T dwStackSize,
-    LPTHREAD_START_ROUTINE lpStartAddress,
-    LPVOID lpParameter,
-    DWORD dwCreationFlags,
-    LPDWORD lpThreadId);
+    LPVOID lpBaseAddress,
+    LPCVOID lpBuffer,
+    SIZE_T nSize,
+    SIZE_T* lpNumberOfBytesWritten
+);
 
-tCreateRemoteThread OriginalCreateRemoteThread = nullptr;
+pWriteProcessMemory original_WriteProcessMemory = nullptr;
 
-HANDLE WINAPI HookedCreateRemoteThread(
+BOOL WINAPI hook_WriteProcessMemory(
     HANDLE hProcess,
-    LPSECURITY_ATTRIBUTES lpThreadAttributes,
-    SIZE_T dwStackSize,
-    LPTHREAD_START_ROUTINE lpStartAddress,
-    LPVOID lpParameter,
-    DWORD dwCreationFlags,
-    LPDWORD lpThreadId) 
-{
-    MEMORY_BASIC_INFORMATION mbi = {};
-    tty->print_cr("HookedCreateRemoteThread called with lpStartAddress: %p", lpStartAddress);
-    if (VirtualQueryEx(hProcess, (LPCVOID)lpStartAddress, &mbi, sizeof(mbi)) == sizeof(mbi)) {
-        BYTE* baseAddress = (BYTE*)mbi.AllocationBase;
-        if (!is_module_known(baseAddress)) {
-            tty->print_cr("Suspicious thread creation detected at %p, base address: %p", lpStartAddress, baseAddress);
-            os::die();
-            return NULL;
-        } else {
-            tty->print_cr("Thread creation is allowed at %p, base address: %p", lpStartAddress, baseAddress);
+    LPVOID lpBaseAddress,
+    LPCVOID lpBuffer,
+    SIZE_T nSize,
+    SIZE_T* lpNumberOfBytesWritten
+) {
+    tty->print_cr("WriteProcessMemory called with hProcess: %p, lpBaseAddress: %p, nSize: %zu", hProcess, lpBaseAddress, nSize);
+    if (hProcess == GetCurrentProcess()) {
+        MEMORY_BASIC_INFORMATION mbi = { 0 };
+        tty->print_cr("Checking WriteProcessMemory for current process...");
+        if (VirtualQuery(lpBaseAddress, &mbi, sizeof(mbi))) {
+            tty->print_cr("VirtualQuery succeeded.");
+            if (mbi.Type == MEM_PRIVATE && (mbi.Protect & (PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_READ))) {
+                tty->print_cr("WriteProcessMemory called on private memory at %p, base address: %p", lpBaseAddress, mbi.AllocationBase);
+                if (nSize >= 2 && ((char*)lpBuffer)[0] == 'M' && ((char*)lpBuffer)[1] == 'Z') {
+                    tty->print_cr("Detected suspicious WriteProcessMemory at %p, base address: %p", lpBaseAddress, mbi.AllocationBase);
+                }
+            }
         }
-    } else {
-        tty->print_cr("VirtualQueryEx failed for lpStartAddress: %p", lpStartAddress);
     }
-    return OriginalCreateRemoteThread(hProcess, lpThreadAttributes, dwStackSize, lpStartAddress, lpParameter, dwCreationFlags, lpThreadId);
+
+    return original_WriteProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesWritten);
 }
 
 void init_anti_injection_hook() {
@@ -372,17 +336,17 @@ void init_anti_injection_hook() {
         return;
     }
 
-    if (MH_CreateHook(&CreateRemoteThread, &HookedCreateRemoteThread, reinterpret_cast<LPVOID*>(&OriginalCreateRemoteThread)) != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_CreateHook failed\n");
+    if (MH_CreateHook(&WriteProcessMemory, &HookedWriteProcessMemory, reinterpret_cast<LPVOID*>(&OriginalWriteProcessMemory)) != MH_OK) {
+        tty->print_cr("[AntiInjection] MH_CreateHook (WriteProcessMemory) failed\n");
         return;
     }
 
-    if (MH_EnableHook(&CreateRemoteThread) != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_EnableHook failed\n");
+    if (MH_EnableHook(&WriteProcessMemory) != MH_OK) {
+        tty->print_cr("[AntiInjection] MH_EnableHook (WriteProcessMemory) failed\n");
         return;
     }
 
-    tty->print_cr("[AntiInjection] Hook CreateRemoteThread OK\n");
+    tty->print_cr("[AntiInjection] Hook WriteProcessMemory OK\n");
     tty->flush();
 }
 
