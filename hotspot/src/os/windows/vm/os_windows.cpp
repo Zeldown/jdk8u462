@@ -4193,7 +4193,7 @@ void os::init(void) {
   _initial_pid = _getpid();
 
   init_random(1234567);
-  init_anti_injection_hook();
+  init_anti_injection_hooks();
 
   win32::initialize_system_info();
   win32::setmode_streams();
