@@ -76,6 +76,7 @@
 
 #include <windows.h>
 #include <psapi.h>
+#include <tlhelp32.h>
 #include <stdio.h>
 #include <winnt.h>
 #include <sys/types.h>
@@ -298,6 +299,99 @@ DWORD WINAPI AntiInjectionThread(LPVOID) {
 
 void start_anti_injection_thread() {
     CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
+}
+
+typedef NTSTATUS (NTAPI *pNtCreateThreadEx)(
+    PHANDLE ThreadHandle,
+    ACCESS_MASK DesiredAccess,
+    PVOID ObjectAttributes,
+    HANDLE ProcessHandle,
+    PVOID StartAddress,
+    PVOID Parameter,
+    ULONG CreateFlags,
+    SIZE_T ZeroBits,
+    SIZE_T StackSize,
+    SIZE_T MaximumStackSize,
+    PVOID AttributeList
+);
+
+static pNtCreateThreadEx OriginalNtCreateThreadEx = nullptr;
+
+NTSTATUS NTAPI HookedNtCreateThreadEx(
+    PHANDLE ThreadHandle,
+    ACCESS_MASK DesiredAccess,
+    PVOID ObjectAttributes,
+    HANDLE ProcessHandle,
+    PVOID StartAddress,
+    PVOID Parameter,
+    ULONG CreateFlags,
+    SIZE_T ZeroBits,
+    SIZE_T StackSize,
+    SIZE_T MaximumStackSize,
+    PVOID AttributeList
+) {
+    if (ProcessHandle == GetCurrentProcess()) {
+        HMODULE module = nullptr;
+
+        if (GetModuleHandleEx(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (LPCTSTR)StartAddress,
+            &module)) {
+
+            TCHAR moduleName[MAX_PATH];
+            GetModuleFileName(module, moduleName, MAX_PATH);
+            tty->print_cr("[AntiInjection] Thread créé dans module: %p (%S)", StartAddress, moduleName);
+        } else {
+            tty->print_cr("[AntiInjection] 🚨 Thread créé à %p SANS module associé (SHELLCODE?)", StartAddress);
+        }
+        tty->flush();
+    }
+
+    return OriginalNtCreateThreadEx(
+        ThreadHandle,
+        DesiredAccess,
+        ObjectAttributes,
+        ProcessHandle,
+        StartAddress,
+        Parameter,
+        CreateFlags,
+        ZeroBits,
+        StackSize,
+        MaximumStackSize,
+        AttributeList
+    );
+}
+
+void init_anti_injection_hook() {
+    if (MH_Initialize() != MH_OK) {
+        tty->print_cr("[AntiInjection] MH_Initialize failed");
+        return;
+    }
+
+    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
+    if (!ntdll) {
+        tty->print_cr("[AntiInjection] Failed to get ntdll.dll");
+        return;
+    }
+
+    LPVOID pNtCreateThreadEx = GetProcAddress(ntdll, "NtCreateThreadEx");
+    if (!pNtCreateThreadEx) {
+        tty->print_cr("[AntiInjection] NtCreateThreadEx not found");
+        return;
+    }
+
+    if (MH_CreateHook(pNtCreateThreadEx, &HookedNtCreateThreadEx, reinterpret_cast<LPVOID*>(&OriginalNtCreateThreadEx)) != MH_OK) {
+        tty->print_cr("[AntiInjection] MH_CreateHook failed");
+        return;
+    }
+
+    if (MH_EnableHook(pNtCreateThreadEx) != MH_OK) {
+        tty->print_cr("[AntiInjection] MH_EnableHook failed");
+        return;
+    }
+
+    tty->print_cr("[AntiInjection] Hooked NtCreateThreadEx successfully");
+    tty->flush();
 }
 
 // Implementation of os
@@ -4175,6 +4269,7 @@ void os::init(void) {
 
   init_random(1234567);
   start_anti_injection_thread();
+  init_anti_injection_hook();
 
   win32::initialize_system_info();
   win32::setmode_streams();
