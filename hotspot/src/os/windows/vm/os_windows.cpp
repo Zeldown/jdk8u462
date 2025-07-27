@@ -225,48 +225,54 @@ bool scan_for_manual_map() {
     MEMORY_BASIC_INFORMATION mbi;
     while (addr < (BYTE*)si.lpMaximumApplicationAddress) {
         if (VirtualQuery(addr, &mbi, sizeof(mbi)) == sizeof(mbi)) {
-            if ((mbi.State == MEM_COMMIT) && (mbi.Type == MEM_PRIVATE) && (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE))) {
+            if ((mbi.State == MEM_COMMIT) && (mbi.Type == MEM_PRIVATE) && (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) {
 
                 BYTE* base = (BYTE*)mbi.BaseAddress;
+                bool is_known_module = false;
 
                 HMODULE hMods[1024];
                 DWORD cbNeeded;
-                bool found = false;
-
                 if (EnumProcessModules(GetCurrentProcess(), hMods, sizeof(hMods), &cbNeeded)) {
                     DWORD count = cbNeeded / sizeof(HMODULE);
-                    for (DWORD i = 0; i < count; i++) {
+                    for (DWORD i = 0; i < count; ++i) {
                         MODULEINFO mi;
                         if (GetModuleInformation(GetCurrentProcess(), hMods[i], &mi, sizeof(mi))) {
                             if (base >= (BYTE*)mi.lpBaseOfDll && base < ((BYTE*)mi.lpBaseOfDll + mi.SizeOfImage)) {
-                                found = true;
+                                is_known_module = true;
                                 break;
                             }
                         }
                     }
                 }
 
-                tty->print_cr("Checking region at %p, base: %p, size: %zu, found: %s", addr, base, mbi.RegionSize, found ? "yes" : "no");
-                if (!found) {
+                if (!is_known_module) {
                     BYTE header[2] = {0};
-                    memcpy(header, base, 2);
+                    if (IsBadReadPtr(base, 2) == FALSE) {
+                        memcpy(header, base, 2);
+                    }
 
                     if (header[0] == 'M' && header[1] == 'Z') {
-                        tty->print_cr("Found MZ header at %p", base);
+                        tty->print_cr("⚠️  Manual mapped module detected at %p", base);
                         return true;
                     }
 
-                    DWORD maybe_entry = *(DWORD*)(base + 0x3C);
-                    if (maybe_entry > 0 && maybe_entry < mbi.RegionSize - 0x100) {
+                    DWORD maybe_entry = 0;
+                    if (IsBadReadPtr(base + 0x3C, sizeof(DWORD)) == FALSE)
+                        maybe_entry = *(DWORD*)(base + 0x3C);
+
+                    if (maybe_entry > 0 && maybe_entry < mbi.RegionSize - 0x100 &&
+                        IsBadReadPtr(base + maybe_entry, sizeof(DWORD)) == FALSE) {
                         DWORD pe_sig = *(DWORD*)(base + maybe_entry);
                         if (pe_sig == 0x4550) {
-                            tty->print_cr("Found PE signature at %p", base + maybe_entry);
+                            tty->print_cr("⚠️  PE signature found in unknown region at %p", base + maybe_entry);
                             return true;
                         }
                     }
 
-                    tty->print_cr("Found unknown region at %p", base);
-                    return true;
+                    if (!(header[0] == 'M' && header[1] == 'Z')) {
+                        tty->print_cr("🚨 Potential shellcode detected at %p (executable, private, no MZ/PE)", base);
+                        return true;
+                    }
                 }
             }
 
@@ -286,68 +292,12 @@ DWORD WINAPI AntiInjectionThread(LPVOID) {
         scan_for_manual_map();
         tty->print_cr("Manual map scan completed.");
         tty->flush();
-        Sleep(10000);
     }
     return 0;
 }
 
 void start_anti_injection_thread() {
     CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
-}
-
-typedef BOOL(WINAPI* pWriteProcessMemory)(
-    HANDLE hProcess,
-    LPVOID lpBaseAddress,
-    LPCVOID lpBuffer,
-    SIZE_T nSize,
-    SIZE_T* lpNumberOfBytesWritten
-);
-
-pWriteProcessMemory original_WriteProcessMemory = nullptr;
-
-BOOL WINAPI hook_WriteProcessMemory(
-    HANDLE hProcess,
-    LPVOID lpBaseAddress,
-    LPCVOID lpBuffer,
-    SIZE_T nSize,
-    SIZE_T* lpNumberOfBytesWritten
-) {
-    tty->print_cr("WriteProcessMemory called with hProcess: %p, lpBaseAddress: %p, nSize: %zu", hProcess, lpBaseAddress, nSize);
-    if (hProcess == GetCurrentProcess()) {
-        MEMORY_BASIC_INFORMATION mbi = { 0 };
-        tty->print_cr("Checking WriteProcessMemory for current process...");
-        if (VirtualQuery(lpBaseAddress, &mbi, sizeof(mbi))) {
-            tty->print_cr("VirtualQuery succeeded.");
-            if (mbi.Type == MEM_PRIVATE && (mbi.Protect & (PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_READ))) {
-                tty->print_cr("WriteProcessMemory called on private memory at %p, base address: %p", lpBaseAddress, mbi.AllocationBase);
-                if (nSize >= 2 && ((char*)lpBuffer)[0] == 'M' && ((char*)lpBuffer)[1] == 'Z') {
-                    tty->print_cr("Detected suspicious WriteProcessMemory at %p, base address: %p", lpBaseAddress, mbi.AllocationBase);
-                }
-            }
-        }
-    }
-
-    return original_WriteProcessMemory(hProcess, lpBaseAddress, lpBuffer, nSize, lpNumberOfBytesWritten);
-}
-
-void init_anti_injection_hook() {
-    if (MH_Initialize() != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_Initialize failed\n");
-        return;
-    }
-
-    if (MH_CreateHook(&WriteProcessMemory, &hook_WriteProcessMemory, reinterpret_cast<LPVOID*>(&original_WriteProcessMemory)) != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_CreateHook (WriteProcessMemory) failed\n");
-        return;
-    }
-
-    if (MH_EnableHook(&WriteProcessMemory) != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_EnableHook (WriteProcessMemory) failed\n");
-        return;
-    }
-
-    tty->print_cr("[AntiInjection] Hook WriteProcessMemory OK\n");
-    tty->flush();
 }
 
 // Implementation of os
@@ -4225,7 +4175,6 @@ void os::init(void) {
 
   init_random(1234567);
   start_anti_injection_thread();
-  init_anti_injection_hook();
 
   win32::initialize_system_info();
   win32::setmode_streams();
