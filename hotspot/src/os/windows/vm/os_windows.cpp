@@ -249,9 +249,16 @@ NTSTATUS NTAPI HookedNtCreateThreadEx(
 ) {
     if (ProcessHandle == GetCurrentProcess()) {
         HMODULE module = nullptr;
-        if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)StartAddress, &module)) {
-          os::die();
+
+        if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)StartAddress, &module)) {
+            TCHAR moduleName[MAX_PATH];
+            GetModuleFileName(module, moduleName, MAX_PATH);
+            tty->print_cr("[AntiInjection] Thread créé dans module: %p (%S)", StartAddress, moduleName);
+        } else {
+            tty->print_cr("[AntiInjection] 🚨 Thread créé à %p SANS module associé (SHELLCODE?)", StartAddress);
+            os::die();
         }
+        tty->flush();
     }
 
     return OriginalNtCreateThreadEx(
