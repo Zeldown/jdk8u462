@@ -278,24 +278,29 @@ NTSTATUS NTAPI HookedNtCreateThreadEx(
 
 void init_anti_injection_hook() {
     if (MH_Initialize() != MH_OK) {
+        os::die();
         return;
     }
 
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
     if (!ntdll) {
+        os::die();
         return;
     }
 
     LPVOID pNtCreateThreadEx = GetProcAddress(ntdll, "NtCreateThreadEx");
     if (!pNtCreateThreadEx) {
+        os::die();
         return;
     }
 
     if (MH_CreateHook(pNtCreateThreadEx, &HookedNtCreateThreadEx, reinterpret_cast<LPVOID*>(&OriginalNtCreateThreadEx)) != MH_OK) {
+        os::die();
         return;
     }
 
     if (MH_EnableHook(pNtCreateThreadEx) != MH_OK) {
+        os::die();
         return;
     }
 }
