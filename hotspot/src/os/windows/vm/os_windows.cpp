@@ -247,6 +247,7 @@ NTSTATUS NTAPI HookedNtCreateThreadEx(
     SIZE_T MaximumStackSize,
     PVOID AttributeList
 ) {
+    tty->print_cr("[AntiInjection] Thread créé à %p (ProcessHandle: %p, CreateFlags: %lu)", StartAddress, ProcessHandle, CreateFlags);
     if (ProcessHandle == GetCurrentProcess()) {
         HMODULE module = nullptr;
 
@@ -303,6 +304,8 @@ void init_anti_injection_hook() {
         os::die();
         return;
     }
+
+    tty->print_cr("[AntiInjection] Hook de NtCreateThreadEx initialisé avec succès");
 }
 
 // Implementation of os
