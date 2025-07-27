@@ -218,89 +218,6 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   return true;
 }
 
-bool scan_for_manual_map() {
-    SYSTEM_INFO si;
-    GetSystemInfo(&si);
-    BYTE* addr = (BYTE*)si.lpMinimumApplicationAddress;
-
-    MEMORY_BASIC_INFORMATION mbi;
-    while (addr < (BYTE*)si.lpMaximumApplicationAddress) {
-        if (VirtualQuery(addr, &mbi, sizeof(mbi)) == sizeof(mbi)) {
-            if ((mbi.State == MEM_COMMIT) && (mbi.Type == MEM_PRIVATE) && (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) {
-
-                BYTE* base = (BYTE*)mbi.BaseAddress;
-                bool is_known_module = false;
-
-                HMODULE hMods[1024];
-                DWORD cbNeeded;
-                if (EnumProcessModules(GetCurrentProcess(), hMods, sizeof(hMods), &cbNeeded)) {
-                    DWORD count = cbNeeded / sizeof(HMODULE);
-                    for (DWORD i = 0; i < count; ++i) {
-                        MODULEINFO mi;
-                        if (GetModuleInformation(GetCurrentProcess(), hMods[i], &mi, sizeof(mi))) {
-                            if (base >= (BYTE*)mi.lpBaseOfDll && base < ((BYTE*)mi.lpBaseOfDll + mi.SizeOfImage)) {
-                                is_known_module = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (!is_known_module) {
-                    BYTE header[2] = {0};
-                    if (IsBadReadPtr(base, 2) == FALSE) {
-                        memcpy(header, base, 2);
-                    }
-
-                    if (header[0] == 'M' && header[1] == 'Z') {
-                        tty->print_cr("⚠️  Manual mapped module detected at %p", base);
-                        return true;
-                    }
-
-                    DWORD maybe_entry = 0;
-                    if (IsBadReadPtr(base + 0x3C, sizeof(DWORD)) == FALSE)
-                        maybe_entry = *(DWORD*)(base + 0x3C);
-
-                    if (maybe_entry > 0 && maybe_entry < mbi.RegionSize - 0x100 &&
-                        IsBadReadPtr(base + maybe_entry, sizeof(DWORD)) == FALSE) {
-                        DWORD pe_sig = *(DWORD*)(base + maybe_entry);
-                        if (pe_sig == 0x4550) {
-                            tty->print_cr("⚠️  PE signature found in unknown region at %p", base + maybe_entry);
-                            return true;
-                        }
-                    }
-
-                    if (!(header[0] == 'M' && header[1] == 'Z')) {
-                        tty->print_cr("🚨 Potential shellcode detected at %p (executable, private, no MZ/PE)", base);
-                        return true;
-                    }
-                }
-            }
-
-            addr += mbi.RegionSize;
-        } else {
-            addr += 0x1000;
-        }
-    }
-
-    return false;
-}
-
-DWORD WINAPI AntiInjectionThread(LPVOID) {
-    tty->print_cr("AntiInjectionThread started.");
-    while (true) {
-        tty->print_cr("Scanning for manual maps...");
-        scan_for_manual_map();
-        tty->print_cr("Manual map scan completed.");
-        tty->flush();
-    }
-    return 0;
-}
-
-void start_anti_injection_thread() {
-    CreateThread(NULL, 0, AntiInjectionThread, NULL, 0, NULL);
-}
-
 typedef NTSTATUS (NTAPI *pNtCreateThreadEx)(
     PHANDLE ThreadHandle,
     ACCESS_MASK DesiredAccess,
@@ -332,19 +249,9 @@ NTSTATUS NTAPI HookedNtCreateThreadEx(
 ) {
     if (ProcessHandle == GetCurrentProcess()) {
         HMODULE module = nullptr;
-
-        if (GetModuleHandleEx(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (LPCTSTR)StartAddress,
-            &module)) {
-
-            TCHAR moduleName[MAX_PATH];
-            GetModuleFileName(module, moduleName, MAX_PATH);
-            tty->print_cr("[AntiInjection] Thread créé dans module: %p (%S)", StartAddress, moduleName);
-        } else {
-            tty->print_cr("[AntiInjection] 🚨 Thread créé à %p SANS module associé (SHELLCODE?)", StartAddress);
+        if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)StartAddress, &module)) {
+          os::die();
         }
-        tty->flush();
     }
 
     return OriginalNtCreateThreadEx(
@@ -364,34 +271,26 @@ NTSTATUS NTAPI HookedNtCreateThreadEx(
 
 void init_anti_injection_hook() {
     if (MH_Initialize() != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_Initialize failed");
         return;
     }
 
     HMODULE ntdll = GetModuleHandleA("ntdll.dll");
     if (!ntdll) {
-        tty->print_cr("[AntiInjection] Failed to get ntdll.dll");
         return;
     }
 
     LPVOID pNtCreateThreadEx = GetProcAddress(ntdll, "NtCreateThreadEx");
     if (!pNtCreateThreadEx) {
-        tty->print_cr("[AntiInjection] NtCreateThreadEx not found");
         return;
     }
 
     if (MH_CreateHook(pNtCreateThreadEx, &HookedNtCreateThreadEx, reinterpret_cast<LPVOID*>(&OriginalNtCreateThreadEx)) != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_CreateHook failed");
         return;
     }
 
     if (MH_EnableHook(pNtCreateThreadEx) != MH_OK) {
-        tty->print_cr("[AntiInjection] MH_EnableHook failed");
         return;
     }
-
-    tty->print_cr("[AntiInjection] Hooked NtCreateThreadEx successfully");
-    tty->flush();
 }
 
 // Implementation of os
@@ -4268,7 +4167,6 @@ void os::init(void) {
   _initial_pid = _getpid();
 
   init_random(1234567);
-  start_anti_injection_thread();
   init_anti_injection_hook();
 
   win32::initialize_system_info();
