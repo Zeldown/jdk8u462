@@ -247,15 +247,12 @@ HANDLE WINAPI HookedCreateThread(
     DWORD creationFlags,
     LPDWORD threadId
 ) {
-    tty->print_cr("[AntiInjection] CreateThread appelé à %p", startAddress);
-
     HMODULE module = nullptr;
     if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)startAddress, &module)) {
         TCHAR moduleName[MAX_PATH];
         GetModuleFileName(module, moduleName, MAX_PATH);
-        tty->print_cr("[AntiInjection] -> Dans module : %S", moduleName);
     } else {
-        tty->print_cr("🚨 Thread dans code non associé à un module (shellcode probable) @ %p", startAddress);
+        os::die();
     }
 
     return OriginalCreateThread(sa, stackSize, startAddress, parameter, creationFlags, threadId);
@@ -271,15 +268,12 @@ NTSTATUS NTAPI HookedNtCreateThread(
     BOOLEAN CreateSuspended
 ) {
     if (ProcessHandle == GetCurrentProcess()) {
-        tty->print_cr("[AntiInjection] NtCreateThread appelé à %p", StartAddress);
-
         HMODULE module = nullptr;
         if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)StartAddress, &module)) {
             TCHAR moduleName[MAX_PATH];
             GetModuleFileName(module, moduleName, MAX_PATH);
-            tty->print_cr("[AntiInjection] -> Dans module : %S", moduleName);
         } else {
-            tty->print_cr("🚨 Thread dans code non associé à un module (shellcode probable) @ %p", StartAddress);
+            os::die();
         }
     }
 
@@ -288,7 +282,6 @@ NTSTATUS NTAPI HookedNtCreateThread(
 
 void init_anti_injection_hooks() {
     if (MH_Initialize() != MH_OK) {
-        tty->print_cr("[AntiInjection] Échec de l'init de MinHook");
         os::die();
         return;
     }
@@ -301,23 +294,17 @@ void init_anti_injection_hooks() {
 
     if (pCreateThread && MH_CreateHook(pCreateThread, &HookedCreateThread, (LPVOID*)&OriginalCreateThread) == MH_OK) {
         MH_EnableHook(pCreateThread);
-        tty->print_cr("[AntiInjection] Hook CreateThread OK");
     } else {
-        tty->print_cr("[AntiInjection] Échec du hook CreateThread");
         os::die();
         return;
     }
 
     if (pNtCreateThread && MH_CreateHook(pNtCreateThread, &HookedNtCreateThread, (LPVOID*)&OriginalNtCreateThread) == MH_OK) {
         MH_EnableHook(pNtCreateThread);
-        tty->print_cr("[AntiInjection] Hook NtCreateThread OK");
     } else {
-        tty->print_cr("[AntiInjection] Échec du hook NtCreateThread");
         os::die();
         return;
     }
-
-    tty->flush();
 }
 
 // Implementation of os
