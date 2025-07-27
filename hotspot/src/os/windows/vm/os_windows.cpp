@@ -218,94 +218,106 @@ BOOL WINAPI DllMain(HINSTANCE hinst, DWORD reason, LPVOID reserved) {
   return true;
 }
 
-typedef NTSTATUS (NTAPI *pNtCreateThreadEx)(
-    PHANDLE ThreadHandle,
-    ACCESS_MASK DesiredAccess,
-    PVOID ObjectAttributes,
-    HANDLE ProcessHandle,
-    PVOID StartAddress,
-    PVOID Parameter,
-    ULONG CreateFlags,
-    SIZE_T ZeroBits,
-    SIZE_T StackSize,
-    SIZE_T MaximumStackSize,
-    PVOID AttributeList
+typedef HANDLE(WINAPI* PFN_CreateThread)(
+    LPSECURITY_ATTRIBUTES,
+    SIZE_T,
+    LPTHREAD_START_ROUTINE,
+    LPVOID,
+    DWORD,
+    LPDWORD
 );
+static PFN_CreateThread OriginalCreateThread = nullptr;
 
-static pNtCreateThreadEx OriginalNtCreateThreadEx = nullptr;
+typedef NTSTATUS(NTAPI* PFN_NtCreateThread)(
+    OUT PHANDLE ThreadHandle,
+    IN ACCESS_MASK DesiredAccess,
+    IN PVOID ObjectAttributes,
+    IN HANDLE ProcessHandle,
+    IN PVOID StartAddress,
+    IN PVOID Parameter,
+    IN BOOLEAN CreateSuspended
+);
+static PFN_NtCreateThread OriginalNtCreateThread = nullptr;
 
-NTSTATUS NTAPI HookedNtCreateThreadEx(
+HANDLE WINAPI HookedCreateThread(
+    LPSECURITY_ATTRIBUTES sa,
+    SIZE_T stackSize,
+    LPTHREAD_START_ROUTINE startAddress,
+    LPVOID parameter,
+    DWORD creationFlags,
+    LPDWORD threadId
+) {
+    tty->print_cr("[AntiInjection] CreateThread appelé à %p", startAddress);
+
+    HMODULE module = nullptr;
+    if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)startAddress, &module)) {
+        TCHAR moduleName[MAX_PATH];
+        GetModuleFileName(module, moduleName, MAX_PATH);
+        tty->print_cr("[AntiInjection] -> Dans module : %S", moduleName);
+    } else {
+        tty->print_cr("🚨 Thread dans code non associé à un module (shellcode probable) @ %p", startAddress);
+    }
+
+    return OriginalCreateThread(sa, stackSize, startAddress, parameter, creationFlags, threadId);
+}
+
+NTSTATUS NTAPI HookedNtCreateThread(
     PHANDLE ThreadHandle,
     ACCESS_MASK DesiredAccess,
     PVOID ObjectAttributes,
     HANDLE ProcessHandle,
     PVOID StartAddress,
     PVOID Parameter,
-    ULONG CreateFlags,
-    SIZE_T ZeroBits,
-    SIZE_T StackSize,
-    SIZE_T MaximumStackSize,
-    PVOID AttributeList
+    BOOLEAN CreateSuspended
 ) {
-    tty->print_cr("[AntiInjection] Thread créé à %p (ProcessHandle: %p, CreateFlags: %lu)", StartAddress, ProcessHandle, CreateFlags);
     if (ProcessHandle == GetCurrentProcess()) {
-        HMODULE module = nullptr;
+        tty->print_cr("[AntiInjection] NtCreateThread appelé à %p", StartAddress);
 
+        HMODULE module = nullptr;
         if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)StartAddress, &module)) {
             TCHAR moduleName[MAX_PATH];
             GetModuleFileName(module, moduleName, MAX_PATH);
-            tty->print_cr("[AntiInjection] Thread créé dans module: %p (%S)", StartAddress, moduleName);
+            tty->print_cr("[AntiInjection] -> Dans module : %S", moduleName);
         } else {
-            tty->print_cr("[AntiInjection] 🚨 Thread créé à %p SANS module associé (SHELLCODE?)", StartAddress);
-            os::die();
+            tty->print_cr("🚨 Thread dans code non associé à un module (shellcode probable) @ %p", StartAddress);
         }
-        tty->flush();
     }
 
-    return OriginalNtCreateThreadEx(
-        ThreadHandle,
-        DesiredAccess,
-        ObjectAttributes,
-        ProcessHandle,
-        StartAddress,
-        Parameter,
-        CreateFlags,
-        ZeroBits,
-        StackSize,
-        MaximumStackSize,
-        AttributeList
-    );
+    return OriginalNtCreateThread(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, StartAddress, Parameter, CreateSuspended);
 }
 
-void init_anti_injection_hook() {
+void init_anti_injection_hooks() {
     if (MH_Initialize() != MH_OK) {
+        tty->print_cr("[AntiInjection] Échec de l'init de MinHook");
         os::die();
         return;
     }
 
-    HMODULE ntdll = GetModuleHandleA("ntdll.dll");
-    if (!ntdll) {
+    HMODULE hKernel32 = GetModuleHandleA("kernel32.dll");
+    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+
+    LPVOID pCreateThread = GetProcAddress(hKernel32, "CreateThread");
+    LPVOID pNtCreateThread = GetProcAddress(hNtdll, "NtCreateThread");
+
+    if (pCreateThread && MH_CreateHook(pCreateThread, &HookedCreateThread, (LPVOID*)&OriginalCreateThread) == MH_OK) {
+        MH_EnableHook(pCreateThread);
+        tty->print_cr("[AntiInjection] Hook CreateThread OK");
+    } else {
+        tty->print_cr("[AntiInjection] Échec du hook CreateThread");
         os::die();
         return;
     }
 
-    LPVOID pNtCreateThreadEx = GetProcAddress(ntdll, "NtCreateThreadEx");
-    if (!pNtCreateThreadEx) {
+    if (pNtCreateThread && MH_CreateHook(pNtCreateThread, &HookedNtCreateThread, (LPVOID*)&OriginalNtCreateThread) == MH_OK) {
+        MH_EnableHook(pNtCreateThread);
+        tty->print_cr("[AntiInjection] Hook NtCreateThread OK");
+    } else {
+        tty->print_cr("[AntiInjection] Échec du hook NtCreateThread");
         os::die();
         return;
     }
 
-    if (MH_CreateHook(pNtCreateThreadEx, &HookedNtCreateThreadEx, reinterpret_cast<LPVOID*>(&OriginalNtCreateThreadEx)) != MH_OK) {
-        os::die();
-        return;
-    }
-
-    if (MH_EnableHook(pNtCreateThreadEx) != MH_OK) {
-        os::die();
-        return;
-    }
-
-    tty->print_cr("[AntiInjection] Hook de NtCreateThreadEx initialisé avec succès");
+    tty->flush();
 }
 
 // Implementation of os
