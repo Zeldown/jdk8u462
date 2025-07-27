@@ -336,7 +336,7 @@ void init_anti_injection_hook() {
         return;
     }
 
-    if (MH_CreateHook(&WriteProcessMemory, &HookedWriteProcessMemory, reinterpret_cast<LPVOID*>(&OriginalWriteProcessMemory)) != MH_OK) {
+    if (MH_CreateHook(&WriteProcessMemory, &hook_WriteProcessMemory, reinterpret_cast<LPVOID*>(&original_WriteProcessMemory)) != MH_OK) {
         tty->print_cr("[AntiInjection] MH_CreateHook (WriteProcessMemory) failed\n");
         return;
     }
