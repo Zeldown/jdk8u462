@@ -4163,7 +4163,6 @@ void nx_check_protection() {
 
 // this is called _before_ the global arguments have been parsed
 void os::init(void) {
-  tty->print_cr("os::init()");
   _initial_pid = _getpid();
 
   init_random(1234567);
