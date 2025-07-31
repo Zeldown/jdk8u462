@@ -97,12 +97,14 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#ifndef RtlCaptureStackBackTrace
 extern "C" USHORT WINAPI RtlCaptureStackBackTrace(
     ULONG FramesToSkip,
     ULONG FramesToCapture,
     PVOID* BackTrace,
     PULONG BackTraceHash
 );
+#endif
 #endif
 
 static jint CurrentVersion = JNI_VERSION_1_8;
