@@ -263,7 +263,7 @@ HANDLE WINAPI HookedCreateThread(
 
             if (GetModuleHandle(NULL) != module) {
                 bool signedDll = is_dll_digitally_signed(moduleNameA);
-                if (!signed) {
+                if (!signedDll) {
                     os::die();
                 }
             } else {
