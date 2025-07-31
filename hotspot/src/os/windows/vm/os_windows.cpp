@@ -248,7 +248,13 @@ HANDLE WINAPI HookedCreateThread(
     LPDWORD threadId
 ) {
 
-    tty->print_cr("[HookedCreateThread] StartAddress: %p, Parameter: %p, CreationFlags: %lu", startAddress, parameter, creationFlags);
+    static __declspec(thread) bool in_hook = false;
+    if (in_hook) {
+        return OriginalCreateThread(sa, stackSize, startAddress, parameter, creationFlags, threadId);
+    }
+
+    in_hook = true;
+    tty->print_cr("[HookedCreateThread] CreateThread called with startAddress: %p, parameter: %p, creationFlags: %lu", startAddress, parameter, creationFlags);
     HMODULE module = nullptr;
     if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)startAddress, &module)) {
         wchar_t moduleNameW[MAX_PATH];
@@ -274,7 +280,8 @@ HANDLE WINAPI HookedCreateThread(
     } else {
         os::die();
     }
-
+    in_hook = false;
+    
     return OriginalCreateThread(sa, stackSize, startAddress, parameter, creationFlags, threadId);
 }
 
@@ -288,8 +295,14 @@ NTSTATUS NTAPI HookedNtCreateThread(
     BOOLEAN CreateSuspended
 ) {
 
-    tty->print_cr("[HookedNtCreateThread] ProcessHandle: %p, StartAddress: %p, CreateSuspended: %d", ProcessHandle, StartAddress, CreateSuspended);
     if (ProcessHandle == GetCurrentProcess()) {
+        static __declspec(thread) bool in_hook = false;
+        if (in_hook) {
+          return OriginalNtCreateThread(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, StartAddress, Parameter, CreateSuspended);
+        }
+
+        in_hook = true;
+        tty->print_cr("[HookedNtCreateThread] NtCreateThread called with StartAddress: %p, Parameter: %p, CreateSuspended: %d", StartAddress, Parameter, CreateSuspended);
         HMODULE module = nullptr;
         if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)StartAddress, &module)) {
             wchar_t moduleNameW[MAX_PATH];
@@ -315,9 +328,16 @@ NTSTATUS NTAPI HookedNtCreateThread(
         } else {
             os::die();
         }
+        in_hook = false;
     }
 
     return OriginalNtCreateThread(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, StartAddress, Parameter, CreateSuspended);
+}
+
+static decltype(&MessageBoxA) OriginalMessageBoxA = nullptr;
+int WINAPI HookedMessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) {
+    tty->print_cr("[HookedMessageBoxA] MessageBoxA called with text: %s, caption: %s", lpText, lpCaption);
+    return 0;
 }
 
 void init_anti_injection_hooks() {
@@ -332,6 +352,7 @@ void init_anti_injection_hooks() {
 
     LPVOID pCreateThread = GetProcAddress(hKernel32, "CreateThread");
     LPVOID pNtCreateThread = GetProcAddress(hNtdll, "NtCreateThread");
+    LPVOID pMessageBoxA = GetProcAddress(user32, "MessageBoxA");
 
     if (pCreateThread && MH_CreateHook(pCreateThread, &HookedCreateThread, (LPVOID*)&OriginalCreateThread) == MH_OK) {
         MH_EnableHook(pCreateThread);
@@ -342,6 +363,13 @@ void init_anti_injection_hooks() {
 
     if (pNtCreateThread && MH_CreateHook(pNtCreateThread, &HookedNtCreateThread, (LPVOID*)&OriginalNtCreateThread) == MH_OK) {
         MH_EnableHook(pNtCreateThread);
+    } else {
+        os::die();
+        return;
+    }
+
+    if (pMessageBoxA && MH_CreateHook(pMessageBoxA, &HookedMessageBoxA, (LPVOID*)&OriginalMessageBoxA) == MH_OK) {
+        MH_EnableHook(pMessageBoxA);
     } else {
         os::die();
         return;
