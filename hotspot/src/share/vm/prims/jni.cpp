@@ -95,6 +95,16 @@
 # include "os_bsd.inline.hpp"
 #endif
 
+#ifdef _WIN32
+#include <windows.h>
+extern "C" USHORT WINAPI RtlCaptureStackBackTrace(
+    ULONG FramesToSkip,
+    ULONG FramesToCapture,
+    PVOID* BackTrace,
+    PULONG BackTraceHash
+);
+#endif
+
 static jint CurrentVersion = JNI_VERSION_1_8;
 
 #ifdef _WIN32
@@ -5480,11 +5490,14 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize
 #ifdef _WIN32
   void* stack[10];
   USHORT frames = RtlCaptureStackBackTrace(0, 10, stack, NULL);
-  if (frames < 2) return false;
+  if (frames < 2) {
+    return false;
+  }
 
   MEMORY_BASIC_INFORMATION mbi;
-  if (VirtualQuery(stack[1], &mbi, sizeof(mbi)) == 0)
+  if (VirtualQuery(stack[1], &mbi, sizeof(mbi)) == 0) {
     return false;
+  }
 
   HMODULE callerModule = (HMODULE)mbi.AllocationBase;
   WCHAR path[MAX_PATH];
