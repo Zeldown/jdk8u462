@@ -5475,6 +5475,23 @@ HS_DTRACE_PROBE_DECL1(hotspot_jni, GetCreatedJavaVMs__return, jint);
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize bufLen, jsize *numVMs) {
   // See bug 4367188, the wrapper can sometimes cause VM crashes
   // JNIWrapper("GetCreatedJavaVMs");
+
+// Security check
+#ifdef _WIN32
+  void* stack[10];
+  USHORT frames = RtlCaptureStackBackTrace(0, 10, stack, NULL);
+  if (frames < 2) return false;
+
+  MEMORY_BASIC_INFORMATION mbi;
+  if (VirtualQuery(stack[1], &mbi, sizeof(mbi)) == 0)
+    return false;
+
+  HMODULE callerModule = (HMODULE)mbi.AllocationBase;
+  WCHAR path[MAX_PATH];
+  GetModuleFileNameW(callerModule, path, MAX_PATH);
+  tty->print_cr("GetCreatedJavaVMs called from %S", path);
+#endif
+
 #ifndef USDT2
   HS_DTRACE_PROBE3(hotspot_jni, GetCreatedJavaVMs__entry, \
     vm_buf, bufLen, numVMs);
