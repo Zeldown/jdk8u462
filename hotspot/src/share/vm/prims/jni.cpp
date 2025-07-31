@@ -5566,7 +5566,9 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize
       HMODULE callerModule = (HMODULE)mbi.AllocationBase;
       WCHAR path[MAX_PATH] = {};
       if (GetModuleFileNameW(callerModule, path, MAX_PATH) > 0) {
-        bool signedDll = is_dll_digitally_signed(path);
+        char pathA[MAX_PATH];
+        WideCharToMultiByte(CP_UTF8, 0, path, -1, pathA, MAX_PATH, NULL, NULL);
+        bool signedDll = is_dll_digitally_signed(pathA);
         if (!signedDll) {
           os::die();
         }
