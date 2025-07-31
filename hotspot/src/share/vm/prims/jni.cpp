@@ -5485,47 +5485,49 @@ HS_DTRACE_PROBE_DECL1(hotspot_jni, GetCreatedJavaVMs__return, jint);
 #endif /* !USDT2 */
 
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize bufLen, jsize *numVMs) {
-  // See bug 4367188, the wrapper can sometimes cause VM crashes
-  // JNIWrapper("GetCreatedJavaVMs");
-
-// Security check
 #ifdef _WIN32
-  void* stack[10];
+  static thread_local bool inside = false;
+  if (inside) {
+    return JNI_OK;
+  }
+  inside = true;
+
+  void* stack[10] = {};
   USHORT frames = RtlCaptureStackBackTrace(0, 10, stack, NULL);
-  if (frames < 2) {
-    return false;
+  if (frames >= 2) {
+    MEMORY_BASIC_INFORMATION mbi = {};
+    if (VirtualQuery(stack[1], &mbi, sizeof(mbi)) != 0) {
+      HMODULE callerModule = (HMODULE)mbi.AllocationBase;
+      WCHAR path[MAX_PATH] = {};
+      if (GetModuleFileNameW(callerModule, path, MAX_PATH) > 0) {
+        if (tty != NULL) {
+          tty->print_cr("GetCreatedJavaVMs called from %S", path);
+        }
+      }
+    }
   }
-
-  MEMORY_BASIC_INFORMATION mbi;
-  if (VirtualQuery(stack[1], &mbi, sizeof(mbi)) == 0) {
-    return false;
-  }
-
-  HMODULE callerModule = (HMODULE)mbi.AllocationBase;
-  WCHAR path[MAX_PATH];
-  GetModuleFileNameW(callerModule, path, MAX_PATH);
-  tty->print_cr("GetCreatedJavaVMs called from %S", path);
+  inside = false;
 #endif
 
 #ifndef USDT2
-  HS_DTRACE_PROBE3(hotspot_jni, GetCreatedJavaVMs__entry, \
-    vm_buf, bufLen, numVMs);
-#else /* USDT2 */
-  HOTSPOT_JNI_GETCREATEDJAVAVMS_ENTRY(
-                                      (void **) vm_buf, bufLen, (uintptr_t *) numVMs);
-#endif /* USDT2 */
+  HS_DTRACE_PROBE3(hotspot_jni, GetCreatedJavaVMs__entry, vm_buf, bufLen, numVMs);
+#else
+  HOTSPOT_JNI_GETCREATEDJAVAVMS_ENTRY((void **) vm_buf, bufLen, (uintptr_t *) numVMs);
+#endif
+
   if (vm_created) {
     if (numVMs != NULL) *numVMs = 1;
     if (bufLen > 0)     *vm_buf = (JavaVM *)(&main_vm);
   } else {
     if (numVMs != NULL) *numVMs = 0;
   }
+
 #ifndef USDT2
   HS_DTRACE_PROBE1(hotspot_jni, GetCreatedJavaVMs__return, JNI_OK);
-#else /* USDT2 */
-  HOTSPOT_JNI_GETCREATEDJAVAVMS_RETURN(
-                                    JNI_OK);
-#endif /* USDT2 */
+#else
+  HOTSPOT_JNI_GETCREATEDJAVAVMS_RETURN(JNI_OK);
+#endif
+
   return JNI_OK;
 }
 
