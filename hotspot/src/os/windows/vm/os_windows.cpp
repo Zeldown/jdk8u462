@@ -248,31 +248,32 @@ HANDLE WINAPI HookedCreateThread(
     LPDWORD threadId
 ) {
 
-  HMODULE module = nullptr;
-  if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)startAddress, &module)) {
-      wchar_t moduleNameW[MAX_PATH];
-      if (GetModuleFileNameW(module, moduleNameW, MAX_PATH) > 0) {
-          char moduleNameA[MAX_PATH];
-          WideCharToMultiByte(CP_UTF8, 0, moduleNameW, -1, moduleNameA, MAX_PATH, NULL, NULL);
+    tty->print_cr("[HookedCreateThread] StartAddress: %p, Parameter: %p, CreationFlags: %lu", startAddress, parameter, creationFlags);
+    HMODULE module = nullptr;
+    if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)startAddress, &module)) {
+        wchar_t moduleNameW[MAX_PATH];
+        if (GetModuleFileNameW(module, moduleNameW, MAX_PATH) > 0) {
+            char moduleNameA[MAX_PATH];
+            WideCharToMultiByte(CP_UTF8, 0, moduleNameW, -1, moduleNameA, MAX_PATH, NULL, NULL);
 
-          if (GetModuleHandle(NULL) != module) {
-              bool signedDll = is_dll_digitally_signed(moduleNameA);
-              if (tty != NULL) {
-                  tty->print_cr("[HookedCreateThread] DLL: %s, signed: %s", moduleNameA, signedDll ? "true" : "false");
-              }
-          } else {
-              if (tty != NULL) {
-                  tty->print_cr("[HookedCreateThread] Main module: %s", moduleNameA);
-              }
-          }
-      } else {
-          if (tty != NULL) {
-              tty->print_cr("[HookedCreateThread] GetModuleFileName failed for address: %p", startAddress);
-          }
-      }
-  } else {
-      os::die();
-  }
+            if (GetModuleHandle(NULL) != module) {
+                bool signedDll = is_dll_digitally_signed(moduleNameA);
+                if (tty != NULL) {
+                    tty->print_cr("[HookedCreateThread] DLL: %s, signed: %s", moduleNameA, signedDll ? "true" : "false");
+                }
+            } else {
+                if (tty != NULL) {
+                    tty->print_cr("[HookedCreateThread] Main module: %s", moduleNameA);
+                }
+            }
+        } else {
+            if (tty != NULL) {
+                tty->print_cr("[HookedCreateThread] GetModuleFileName failed for address: %p", startAddress);
+            }
+        }
+    } else {
+        os::die();
+    }
 
     return OriginalCreateThread(sa, stackSize, startAddress, parameter, creationFlags, threadId);
 }
@@ -287,6 +288,7 @@ NTSTATUS NTAPI HookedNtCreateThread(
     BOOLEAN CreateSuspended
 ) {
 
+    tty->print_cr("[HookedNtCreateThread] ProcessHandle: %p, StartAddress: %p, CreateSuspended: %d", ProcessHandle, StartAddress, CreateSuspended);
     if (ProcessHandle == GetCurrentProcess()) {
         HMODULE module = nullptr;
         if (GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCTSTR)StartAddress, &module)) {

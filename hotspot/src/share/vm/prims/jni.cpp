@@ -5486,6 +5486,7 @@ HS_DTRACE_PROBE_DECL1(hotspot_jni, GetCreatedJavaVMs__return, jint);
 
 _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize bufLen, jsize *numVMs) {
 #ifdef _WIN32
+  tty->print_cr("GetCreatedJavaVMs called");
   static thread_local bool inside = false;
   if (inside) {
     return JNI_OK;
