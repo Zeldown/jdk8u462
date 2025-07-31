@@ -442,6 +442,7 @@ JNI_ENTRY(jclass, jni_DefineClass(JNIEnv *env, const char *name, jobject loaderR
 
   // Security check
   #ifdef _WIN32
+  tty->print("Security check for DefineClass for class %s (%s)\n", k->external_name(), name);
   if (k != NULL) {
     const char* class_name = k->external_name();
     if (security_check_and_die_call(class_name, "DefineClass")) {
