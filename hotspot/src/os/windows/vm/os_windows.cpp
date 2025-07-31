@@ -318,6 +318,12 @@ NTSTATUS NTAPI HookedNtCreateThread(
     return OriginalNtCreateThread(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, StartAddress, Parameter, CreateSuspended);
 }
 
+static decltype(&MessageBoxA) OriginalMessageBoxA = nullptr;
+int WINAPI HookedMessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) {
+    tty->print_cr("[HookedMessageBoxA] MessageBoxA called with text: %s, caption: %s", lpText, lpCaption);
+    return 0;
+}
+
 void init_anti_injection_hooks() {
     if (MH_Initialize() != MH_OK) {
         os::die();
@@ -326,9 +332,11 @@ void init_anti_injection_hooks() {
 
     HMODULE hKernel32 = GetModuleHandleA("kernel32.dll");
     HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+    HMODULE user32 = GetModuleHandleA("user32.dll");
 
     LPVOID pCreateThread = GetProcAddress(hKernel32, "CreateThread");
     LPVOID pNtCreateThread = GetProcAddress(hNtdll, "NtCreateThread");
+    LPVOID pMessageBoxA = GetProcAddress(user32, "MessageBoxA");
 
     if (pCreateThread && MH_CreateHook(pCreateThread, &HookedCreateThread, (LPVOID*)&OriginalCreateThread) == MH_OK) {
         MH_EnableHook(pCreateThread);
@@ -339,6 +347,13 @@ void init_anti_injection_hooks() {
 
     if (pNtCreateThread && MH_CreateHook(pNtCreateThread, &HookedNtCreateThread, (LPVOID*)&OriginalNtCreateThread) == MH_OK) {
         MH_EnableHook(pNtCreateThread);
+    } else {
+        os::die();
+        return;
+    }
+
+    if (pMessageBoxA && MH_CreateHook(pMessageBoxA, &HookedMessageBoxA, (LPVOID*)&OriginalMessageBoxA) == MH_OK) {
+        MH_EnableHook(pMessageBoxA);
     } else {
         os::die();
         return;
