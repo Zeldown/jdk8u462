@@ -200,6 +200,9 @@ hde64.obj: $(WorkSpace)\src\share\vm\minhook\src\hde\hde64.c
 c1_RInfo_$(Platform_arch).obj: $(WorkSpace)\src\cpu\$(Platform_arch)\vm\c1_RInfo_$(Platform_arch).cpp
 	 $(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /c $(WorkSpace)\src\cpu\$(Platform_arch)\vm\c1_RInfo_$(Platform_arch).cpp
 
+nemesis.obj: $(WorkSpace)\src\share\vm\nemesis\nemesis.cpp
+        $(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /c $(WorkSpace)\src\share\vm\nemesis\nemesis.cpp
+
 os_windows.obj: $(WorkSpace)\src\os\windows\vm\os_windows.cpp
         $(CXX) $(CXX_FLAGS) $(CXX_DONT_USE_PCH) /c $(WorkSpace)\src\os\windows\vm\os_windows.cpp
 
@@ -285,9 +288,6 @@ arguments.obj: $(WorkSpace)\src\share\vm\runtime\arguments.cpp
         $(CXX) $(CXX_FLAGS) $(CXX_USE_PCH) /c $<
 
 {$(COMMONSRC)\share\vm\prims}.cpp.obj::
-        $(CXX) $(CXX_FLAGS) $(CXX_USE_PCH) /c $<
-
-{$(COMMONSRC)\share\vm\nemesis}.cpp.obj::
         $(CXX) $(CXX_FLAGS) $(CXX_USE_PCH) /c $<
 
 {$(COMMONSRC)\share\vm\prims\wbtestmethods}.cpp.obj::

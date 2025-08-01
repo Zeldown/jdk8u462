@@ -22,9 +22,9 @@
 #include <wintrust.h>
 #include <softpub.h>
 #include <wincrypt.h>
-#include <fstream>
 #include <cstring>
 #include <cstdlib>
+#include <stdio.h>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -101,10 +101,10 @@ void nemesis::kill(const char* reason) {
     }
     encrypted[reason_len] = '\0';
     
-    std::ofstream debug_file("nemesis.debug", std::ios::binary);
-    if (debug_file.is_open()) {
-      debug_file.write(encrypted, reason_len);
-      debug_file.close();
+    FILE* debug_file = fopen("nemesis.debug", "wb");
+    if (debug_file != NULL) {
+      fwrite(encrypted, 1, reason_len, debug_file);
+      fclose(debug_file);
     }
     
     free(encrypted);
