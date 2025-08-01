@@ -78,6 +78,11 @@ if [ "${Platform_os_family}" = "windows" ]; then
   if [ -d "${MINHOOK_PATH}" ]; then
     BASE_PATHS="${BASE_PATHS} ${MINHOOK_PATH}/src ${MINHOOK_PATH}/src/hde ${MINHOOK_PATH}/src/include"
   fi
+
+  NEMESIS_PATH="${COMMONSRC}/share/vm/nemesis"
+  if [ -d "${NEMESIS_PATH}" ]; then
+    BASE_PATHS="${BASE_PATHS} ${NEMESIS_PATH}"
+  fi
 fi
 
 if [ "$ENABLE_JFR" = "true" ]; then

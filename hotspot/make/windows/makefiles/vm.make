@@ -121,6 +121,7 @@ CXX_INCLUDE_DIRS=$(CXX_INCLUDE_DIRS) \
   /I "$(COMMONSRC)\share\vm" \
   /I "$(COMMONSRC)\share\vm\precompiled" \
   /I "$(COMMONSRC)\share\vm\prims" \
+  /I "$(COMMONSRC)\share\vm\nemesis" \
   /I "$(COMMONSRC)\share\vm\minhook/src" \
   /I "$(COMMONSRC)\share\vm\minhook/src/hde" \
   /I "$(COMMONSRC)\share\vm\minhook/include" \
@@ -163,6 +164,7 @@ VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/oops
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/prims
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/prims/wbtestmethods
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/runtime
+VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/nemesis
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/minhook/src
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/minhook/src/hde
 VM_PATH=$(VM_PATH);$(WorkSpace)/src/share/vm/minhook/include
@@ -283,6 +285,9 @@ arguments.obj: $(WorkSpace)\src\share\vm\runtime\arguments.cpp
         $(CXX) $(CXX_FLAGS) $(CXX_USE_PCH) /c $<
 
 {$(COMMONSRC)\share\vm\prims}.cpp.obj::
+        $(CXX) $(CXX_FLAGS) $(CXX_USE_PCH) /c $<
+
+{$(COMMONSRC)\share\vm\nemesis}.cpp.obj::
         $(CXX) $(CXX_FLAGS) $(CXX_USE_PCH) /c $<
 
 {$(COMMONSRC)\share\vm\prims\wbtestmethods}.cpp.obj::
