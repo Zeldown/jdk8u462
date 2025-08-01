@@ -194,7 +194,6 @@ HANDLE WINAPI HookedCreateThread(
         if (GetModuleFileNameW(module, moduleNameW, MAX_PATH) > 0) {
             char moduleNameA[MAX_PATH];
             WideCharToMultiByte(CP_UTF8, 0, moduleNameW, -1, moduleNameA, MAX_PATH, NULL, NULL);
-
             if (GetModuleHandle(NULL) != module) {
                 bool signedDll = nemesis::validateModule(moduleNameA);
                 if (!signedDll) {
@@ -202,13 +201,7 @@ HANDLE WINAPI HookedCreateThread(
                     sprintf(error_msg, "#h16d0: %s", moduleNameA);
                     nemesis::kill(error_msg);
                 }
-            } else {
-                char error_msg[MAX_PATH + 32];
-                sprintf(error_msg, "#h16d1: %s", moduleNameA);
-                nemesis::kill(error_msg);
             }
-        } else {
-            nemesis::kill("#h16d2");
         }
     } else {
         nemesis::kill("#h16d3");
@@ -241,7 +234,6 @@ NTSTATUS NTAPI HookedNtCreateThread(
             if (GetModuleFileNameW(module, moduleNameW, MAX_PATH) > 0) {
                 char moduleNameA[MAX_PATH];
                 WideCharToMultiByte(CP_UTF8, 0, moduleNameW, -1, moduleNameA, MAX_PATH, NULL, NULL);
-
                 if (GetModuleHandle(NULL) != module) {
                     bool signedDll = nemesis::validateModule(moduleNameA);
                     if (!signedDll) {
@@ -249,13 +241,7 @@ NTSTATUS NTAPI HookedNtCreateThread(
                         sprintf(error_msg, "#h18d0: %s", moduleNameA);
                         nemesis::kill(error_msg);
                     }
-                } else {
-                    char error_msg[MAX_PATH + 32];
-                    sprintf(error_msg, "#h18d1: %s", moduleNameA);
-                    nemesis::kill(error_msg);
                 }
-            } else {
-                nemesis::kill("#h18d2");
             }
         } else {
             nemesis::kill("#h18d3");
