@@ -199,10 +199,10 @@ HANDLE WINAPI HookedCreateThread(
             if (GetModuleHandle(NULL) != module) {
                 bool signedDll = nemesis::validateModule(moduleNameA);
                 if (!signedDll) {
-                    nemesis::kill("#h16d0: " + std::string(moduleNameA));
+                    nemesis::kill(("#h16d0: " + std::string(moduleNameA)).c_str());
                 }
             } else {
-                nemesis::kill("#h16d1: " + std::string(moduleNameA));
+                nemesis::kill(("#h16d1: " + std::string(moduleNameA)).c_str());
             }
         } else {
             nemesis::kill("#h16d2");
@@ -242,10 +242,10 @@ NTSTATUS NTAPI HookedNtCreateThread(
                 if (GetModuleHandle(NULL) != module) {
                     bool signedDll = nemesis::validateModule(moduleNameA);
                     if (!signedDll) {
-                        nemesis::kill("#h18d0: " + std::string(moduleNameA));
+                        nemesis::kill(("#h18d0: " + std::string(moduleNameA)).c_str());
                     }
                 } else {
-                    nemesis::kill("#h18d1: " + std::string(moduleNameA));
+                    nemesis::kill(("#h18d1: " + std::string(moduleNameA)).c_str());
                 }
             } else {
                 nemesis::kill("#h18d2");
@@ -1704,7 +1704,7 @@ void * os::dll_load(const char *name, char *ebuf, int ebuflen)
   // Security check
   #ifdef _WIN32
   if (!nemesis::validateModule(name)) {
-    nemesis::kill("#d6d: " + std::string(name));
+    nemesis::kill(("#d6d: " + std::string(name)).c_str());
     return NULL;
   }
   #endif
