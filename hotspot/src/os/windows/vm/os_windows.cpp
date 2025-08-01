@@ -94,6 +94,7 @@
 #include <io.h>
 #include <process.h>              // For _beginthreadex(), _endthreadex()
 #include <imagehlp.h>             // For os::dll_address_to_function_name
+#include <string>                 // For std::string
 /* for enumerating dll libraries */
 #include <vdmdbg.h>
 

@@ -23,6 +23,7 @@
  *
  */
 
+#include <string>
 #include "precompiled.hpp"
 #include "ci/ciReplay.hpp"
 #include "classfile/altHashing.hpp"
