@@ -16,9 +16,6 @@
 #ifndef SHARE_VM_NEMESIS_NEMESIS_HPP
 #define SHARE_VM_NEMESIS_NEMESIS_HPP
 
-#include "memory/allocation.hpp"
-#include "utilities/globalDefinitions.hpp"
-
 class nemesis : AllStatic {
  public:
   static bool validateModule(const char* path);
