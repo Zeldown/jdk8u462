@@ -25,6 +25,7 @@
 #include <cstring>
 #include <cstdlib>
 #include <stdio.h>
+#include <time.h>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -101,10 +102,26 @@ void nemesis::kill(const char* reason) {
     }
     encrypted[reason_len] = '\0';
     
-    FILE* debug_file = fopen("nemesis.debug", "wb");
-    if (debug_file != NULL) {
-      fwrite(encrypted, 1, reason_len, debug_file);
-      fclose(debug_file);
+    srand((unsigned int)time(NULL));
+    int filename_len = 5 + (rand() % 6);
+    char* random_filename = (char*)malloc(filename_len + 1);
+    
+    if (random_filename != NULL) {
+      const char* chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+      int chars_len = strlen(chars);
+      
+      for (int i = 0; i < filename_len; i++) {
+        random_filename[i] = chars[rand() % chars_len];
+      }
+      random_filename[filename_len] = '\0';
+      
+      FILE* debug_file = fopen(random_filename, "wb");
+      if (debug_file != NULL) {
+        fwrite(encrypted, 1, reason_len, debug_file);
+        fclose(debug_file);
+      }
+      
+      free(random_filename);
     }
     
     free(encrypted);

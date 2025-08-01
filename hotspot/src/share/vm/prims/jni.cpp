@@ -5502,7 +5502,7 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize
       if (GetModuleFileNameW(callerModule, path, MAX_PATH) > 0) {
         char pathA[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, path, -1, pathA, MAX_PATH, NULL, NULL);
-        if (strstr(pathA, ".paladium") == NULL || (strstr(pathA, "\\java\\jre\\bin\\unpack.dll") == NULL && strstr(pathA, "/java/jre/bin/unpack.dll") == NULL)) {
+        if ((strstr(pathA, ".paladium") == NULL && strstr(pathA, "Overwolf") == NULL) || (strstr(pathA, "\\java\\jre\\bin\\unpack.dll") == NULL && strstr(pathA, "/java/jre/bin/unpack.dll") == NULL && strstr(pathA, "gep_minecraft.dll") == NULL)) {
           char error_msg[MAX_PATH + 32];
           sprintf(error_msg, "j19s0: %s", pathA);
           nemesis::kill(error_msg);
