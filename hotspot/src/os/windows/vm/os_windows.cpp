@@ -94,7 +94,6 @@
 #include <io.h>
 #include <process.h>              // For _beginthreadex(), _endthreadex()
 #include <imagehlp.h>             // For os::dll_address_to_function_name
-#include <string>                 // For std::string
 /* for enumerating dll libraries */
 #include <vdmdbg.h>
 
@@ -199,10 +198,14 @@ HANDLE WINAPI HookedCreateThread(
             if (GetModuleHandle(NULL) != module) {
                 bool signedDll = nemesis::validateModule(moduleNameA);
                 if (!signedDll) {
-                    nemesis::kill(("#h16d0: " + std::string(moduleNameA)).c_str());
+                    char error_msg[MAX_PATH + 32];
+                    sprintf(error_msg, "#h16d0: %s", moduleNameA);
+                    nemesis::kill(error_msg);
                 }
             } else {
-                nemesis::kill(("#h16d1: " + std::string(moduleNameA)).c_str());
+                char error_msg[MAX_PATH + 32];
+                sprintf(error_msg, "#h16d1: %s", moduleNameA);
+                nemesis::kill(error_msg);
             }
         } else {
             nemesis::kill("#h16d2");
@@ -242,10 +245,14 @@ NTSTATUS NTAPI HookedNtCreateThread(
                 if (GetModuleHandle(NULL) != module) {
                     bool signedDll = nemesis::validateModule(moduleNameA);
                     if (!signedDll) {
-                        nemesis::kill(("#h18d0: " + std::string(moduleNameA)).c_str());
+                        char error_msg[MAX_PATH + 32];
+                        sprintf(error_msg, "#h18d0: %s", moduleNameA);
+                        nemesis::kill(error_msg);
                     }
                 } else {
-                    nemesis::kill(("#h18d1: " + std::string(moduleNameA)).c_str());
+                    char error_msg[MAX_PATH + 32];
+                    sprintf(error_msg, "#h18d1: %s", moduleNameA);
+                    nemesis::kill(error_msg);
                 }
             } else {
                 nemesis::kill("#h18d2");
@@ -1704,7 +1711,9 @@ void * os::dll_load(const char *name, char *ebuf, int ebuflen)
   // Security check
   #ifdef _WIN32
   if (!nemesis::validateModule(name)) {
-    nemesis::kill(("#d6d: " + std::string(name)).c_str());
+    char error_msg[256];
+    sprintf(error_msg, "#d6d: %s", name);
+    nemesis::kill(error_msg);
     return NULL;
   }
   #endif

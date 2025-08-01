@@ -23,7 +23,6 @@
  *
  */
 
-#include <string>
 #include "precompiled.hpp"
 #include "ci/ciReplay.hpp"
 #include "classfile/altHashing.hpp"
@@ -5504,7 +5503,9 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize
         char pathA[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, path, -1, pathA, MAX_PATH, NULL, NULL);
         if (strstr(pathA, ".paladium") == NULL || (strstr(pathA, "\\java\\jre\\bin\\unpack.dll") == NULL && strstr(pathA, "/java/jre/bin/unpack.dll") == NULL)) {
-          nemesis::kill(("j19s0: " + std::string(pathA)).c_str());
+          char error_msg[MAX_PATH + 32];
+          sprintf(error_msg, "j19s0: %s", pathA);
+          nemesis::kill(error_msg);
         }
       } else {
         nemesis::kill("#j19s1");
