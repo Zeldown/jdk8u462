@@ -1244,6 +1244,7 @@ static jclass jvm_define_class_common(JNIEnv *env, const char *name,
   #ifdef _WIN32
   if (k != NULL) {
     const char* class_name_str = k->external_name();
+    tty->print_cr("JVM_DefineClass: class name = %s", class_name_str);
     if (security_check_and_die_load(class_name_str, "jvm_define_class_common")) {
       return NULL;
     }

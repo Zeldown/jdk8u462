@@ -111,10 +111,6 @@ bool nemesis::validateModule(const char* path) {
   WinVerifyTrust(NULL, &policy_guid, &trust_data);
   free(wide_path);
 
-  if (result != ERROR_SUCCESS) {
-    return false;
-  }
-
   return (result == ERROR_SUCCESS);
 }
 
