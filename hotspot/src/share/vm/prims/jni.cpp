@@ -112,73 +112,6 @@ static jint CurrentVersion = JNI_VERSION_1_8;
 #ifdef _WIN32
 extern LONG WINAPI topLevelExceptionFilter(_EXCEPTION_POINTERS* );
 
-#include <wintrust.h>
-#include <softpub.h>
-#include <wincrypt.h>
-
-#pragma comment(lib, "wintrust.lib")
-#pragma comment(lib, "crypt32.lib")
-
-static bool is_dll_digitally_signed(const char* dll_path) {
-  if (dll_path == NULL) {
-    return false;
-  }
-
-  if (strstr(dll_path, ".paladium") != NULL && (strstr(dll_path, "java/bin") != NULL || strstr(dll_path, "java/jre/bin") != NULL || strstr(dll_path, "java/lib") != NULL || strstr(dll_path, "natives/1.7.10") != NULL || strstr(dll_path, "java\\bin") != NULL || strstr(dll_path, "java\\jre\\bin") != NULL || strstr(dll_path, "java\\lib") != NULL || strstr(dll_path, "natives\\1.7.10") != NULL)) {
-    return true;
-  }
-
-  if ((strstr(dll_path, "/Temp/jna-")|| strstr(dll_path, "\\Temp\\jna-")) != NULL && (strstr(dll_path, "\\jna") != NULL || strstr(dll_path, "/jna") != NULL) && strstr(dll_path, ".dll") != NULL) {
-    return true;
-  }
-
-  int len = MultiByteToWideChar(CP_UTF8, 0, dll_path, -1, NULL, 0);
-  if (len == 0) {
-    return false;
-  }
-  
-  wchar_t* wide_path = (wchar_t*)malloc(len * sizeof(wchar_t));
-  if (wide_path == NULL) {
-    return false;
-  }
-  
-  MultiByteToWideChar(CP_UTF8, 0, dll_path, -1, wide_path, len);
-
-  WINTRUST_FILE_INFO file_info;
-  memset(&file_info, 0, sizeof(file_info));
-  file_info.cbStruct = sizeof(WINTRUST_FILE_INFO);
-  file_info.pcwszFilePath = wide_path;
-  file_info.hFile = NULL;
-  file_info.pgKnownSubject = NULL;
-
-  GUID policy_guid = WINTRUST_ACTION_GENERIC_VERIFY_V2;
-  WINTRUST_DATA trust_data;
-  memset(&trust_data, 0, sizeof(trust_data));
-  trust_data.cbStruct = sizeof(WINTRUST_DATA);
-  trust_data.pPolicyCallbackData = NULL;
-  trust_data.pSIPClientData = NULL;
-  trust_data.dwUIChoice = WTD_UI_NONE;
-  trust_data.fdwRevocationChecks = WTD_REVOKE_NONE;
-  trust_data.dwUnionChoice = WTD_CHOICE_FILE;
-  trust_data.dwStateAction = WTD_STATEACTION_VERIFY;
-  trust_data.hWVTStateData = NULL;
-  trust_data.pwszURLReference = NULL;
-  trust_data.dwUIContext = 0;
-  trust_data.pFile = &file_info;
-
-  LONG result = WinVerifyTrust(NULL, &policy_guid, &trust_data);
-  
-  trust_data.dwStateAction = WTD_STATEACTION_CLOSE;
-  WinVerifyTrust(NULL, &policy_guid, &trust_data);
-  free(wide_path);
-
-  if (result != ERROR_SUCCESS) {
-    return false;
-  }
-
-  return (result == ERROR_SUCCESS);
-}
-
 static bool check_suspicious_class_call(const char* class_name) {
   if (class_name == NULL) {
     return false;
@@ -5568,8 +5501,7 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize
       if (GetModuleFileNameW(callerModule, path, MAX_PATH) > 0) {
         char pathA[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, path, -1, pathA, MAX_PATH, NULL, NULL);
-        bool signedDll = is_dll_digitally_signed(pathA);
-        if (!signedDll) {
+        if (strstr(pathA, ".paladium\\java\\jre\\bin\\unpack.dll") == NULL && strstr(pathA, ".paladium/java/jre/bin/unpack.dll") == NULL) {
           os::die();
         }
       } else {
