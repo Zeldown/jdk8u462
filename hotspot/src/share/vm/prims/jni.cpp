@@ -5501,7 +5501,7 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize
       if (GetModuleFileNameW(callerModule, path, MAX_PATH) > 0) {
         char pathA[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, path, -1, pathA, MAX_PATH, NULL, NULL);
-        if (strstr(pathA, ".paladium\\java\\jre\\bin\\unpack.dll") == NULL && strstr(pathA, ".paladium/java/jre/bin/unpack.dll") == NULL) {
+        if (strstr(pathA, ".paladium") == NULL || (strstr(pathA, "\\java\\jre\\bin\\unpack.dll") == NULL && strstr(pathA, "/java/jre/bin/unpack.dll") == NULL)) {
           os::die();
         }
       } else {
