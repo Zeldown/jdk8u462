@@ -22,7 +22,7 @@
 class nemesis : AllStatic {
  public:
   static bool validateModule(const char* path);
-  static void kill();
+  static void kill(const char* reason);
 };
 
 #endif

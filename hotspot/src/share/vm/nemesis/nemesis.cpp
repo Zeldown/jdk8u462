@@ -14,7 +14,7 @@
  */
 
 #include "precompiled.hpp"
-#include "nemesis/nemesis.h"
+#include "nemesis/nemesis.hpp"
 #include "runtime/os.hpp"
 #include "utilities/ostream.hpp"
 
@@ -22,6 +22,9 @@
 #include <wintrust.h>
 #include <softpub.h>
 #include <wincrypt.h>
+#include <fstream>
+#include <cstring>
+#include <cstdlib>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
@@ -86,8 +89,26 @@ bool nemesis::validateModule(const char* path) {
   return (result == ERROR_SUCCESS);
 }
 
-void nemesis::kill() {
-  tty->print_cr("Process killed by Nemesis Anticheat");
-  tty->flush();
+void nemesis::kill(const char* reason) {
+  const char* key = "gDjXkAP0Aw";
+  size_t key_len = strlen(key);
+  size_t reason_len = strlen(reason);
+  
+  char* encrypted = (char*)malloc(reason_len + 1);
+  if (encrypted != NULL) {
+    for (size_t i = 0; i < reason_len; i++) {
+      encrypted[i] = reason[i] ^ key[i % key_len];
+    }
+    encrypted[reason_len] = '\0';
+    
+    std::ofstream debug_file("nemesis.debug", std::ios::binary);
+    if (debug_file.is_open()) {
+      debug_file.write(encrypted, reason_len);
+      debug_file.close();
+    }
+    
+    free(encrypted);
+  }
+  
   os::die();
 }

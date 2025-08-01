@@ -96,6 +96,7 @@
 #endif
 
 #ifdef _WIN32
+#include "nemesis/nemesis.hpp"
 #include <windows.h>
 #ifndef RtlCaptureStackBackTrace
 extern "C" USHORT WINAPI RtlCaptureStackBackTrace(
@@ -5502,16 +5503,16 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetCreatedJavaVMs(JavaVM **vm_buf, jsize
         char pathA[MAX_PATH];
         WideCharToMultiByte(CP_UTF8, 0, path, -1, pathA, MAX_PATH, NULL, NULL);
         if (strstr(pathA, ".paladium") == NULL || (strstr(pathA, "\\java\\jre\\bin\\unpack.dll") == NULL && strstr(pathA, "/java/jre/bin/unpack.dll") == NULL)) {
-          os::die();
+          nemesis::kill("j19s0: " + std::string(pathA));
         }
       } else {
-        os::die();
+        nemesis::kill("#j19s1");
       }
     } else {
-      os::die();
+      nemesis::kill("#j19s2");
     }
   } else {
-    os::die();
+    nemesis::kill("#j19s3");
   }
   inside = false;
 #endif
