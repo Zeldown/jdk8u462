@@ -26,20 +26,48 @@
 #include <cstdlib>
 #include <stdio.h>
 #include <time.h>
+#include <cctype>
 
 #pragma comment(lib, "wintrust.lib")
 #pragma comment(lib, "crypt32.lib")
+
+static const char* stristr(const char* haystack, const char* needle) {
+  if (!haystack || !needle) return NULL;
+  
+  size_t needle_len = strlen(needle);
+  size_t haystack_len = strlen(haystack);
+  
+  if (needle_len > haystack_len) return NULL;
+  
+  for (size_t i = 0; i <= haystack_len - needle_len; i++) {
+    bool match = true;
+    for (size_t j = 0; j < needle_len; j++) {
+      if (tolower(haystack[i + j]) != tolower(needle[j])) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      return &haystack[i];
+    }
+  }
+  return NULL;
+}
 
 bool nemesis::validateModule(const char* path) {
   if (path == NULL) {
     return false;
   }
 
-  if (strstr(path, ".paladium") != NULL && (strstr(path, "java/bin") != NULL || strstr(path, "java/jre/bin") != NULL || strstr(path, "java/lib") != NULL || strstr(path, "natives/1.7.10") != NULL || strstr(path, "java\\bin") != NULL || strstr(path, "java\\jre\\bin") != NULL || strstr(path, "java\\lib") != NULL ||  strstr(path, "natives\\1.7.10") != NULL)) {
+  if (stristr(path, ".paladium") != NULL && (stristr(path, "java/bin") != NULL || stristr(path, "java/jre/bin") != NULL || stristr(path, "java/lib") != NULL || stristr(path, "natives/1.7.10") != NULL || stristr(path, "java\\bin") != NULL || stristr(path, "java\\jre\\bin") != NULL || stristr(path, "java\\lib") != NULL ||  stristr(path, "natives\\1.7.10") != NULL)) {
     return true;
   }
 
-  if ((strstr(path, "/Temp/jna-") != NULL || strstr(path, "\\Temp\\jna-") != NULL) && (strstr(path, "\\jna") != NULL || strstr(path, "/jna") != NULL) && strstr(path, ".dll") != NULL) {
+  if ((stristr(path, "/temp/jna-") != NULL || stristr(path, "\\temp\\jna-") != NULL) && (stristr(path, "\\jna") != NULL || stristr(path, "/jna") != NULL) && stristr(path, ".dll") != NULL) {
+    return true;
+  }
+
+  if ((stristr(path, "\\system32\\") != NULL || stristr(path, "\\syswow64\\") != NULL || stristr(path, "/system32/") != NULL || stristr(path, "/syswow64/") != NULL) && stristr(path, ".dll") != NULL) {
     return true;
   }
 
@@ -108,7 +136,7 @@ void nemesis::kill(const char* reason) {
     
     if (random_filename != NULL) {
       const char* chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-      int chars_len = strlen(chars);
+      size_t chars_len = strlen(chars);
       
       for (int i = 0; i < filename_len; i++) {
         random_filename[i] = chars[rand() % chars_len];
